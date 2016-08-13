@@ -252,7 +252,7 @@ int main(int argc, char **argv)
         //startTime = clock();
         count ++;
         //ros::Time timeUsed = ros::Time::now() - startTime;
-        printf ("time used: %f \n",(ros::Time::now().toSec() - startTime));
+        printf ("time used: %f \n, no of loops: %d",(ros::Time::now().toSec() - startTime), count);
         printf ("package loss numebr: %d\n", package_loss_nu);
     }
 
