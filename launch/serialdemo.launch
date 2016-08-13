@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+
+ <!-- serial demo node -->
+  <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node0" output="screen">
+	<param name="fccSerialPort" type="string" value="/dev/ttyUSB0" />
+  </node>
+
+ <!-- <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node1" output="screen">
+	<param name="fccSerialPort" type="string" value="/dev/ttyUSB1" />
+  </node>
+-->
+</launch>
+
