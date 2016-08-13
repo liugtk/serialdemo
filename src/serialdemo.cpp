@@ -183,7 +183,8 @@ int main(int argc, char **argv)
         return 0;
     }
 	//CREATE TIMER;
-	clock_t startTime = clock();
+	double startTime = (double)ros::Time::now().toSec();
+	int count = 0;
 	double secondPassed;
     while (ros::ok())
     {
@@ -247,9 +248,11 @@ int main(int argc, char **argv)
 	
         //loop_rate.sleep();
         //ros::Duration(1).sleep();
-        double timeUsed = clock() - startTime;
-        startTime = clock();
-        printf ("time used: %f, time per second: %f, time:: %f\n",timeUsed,(double)CLOCKS_PER_SEC, (double)clock());
+        //double timeUsed = clock() - startTime;
+        //startTime = clock();
+        count ++;
+        //ros::Time timeUsed = ros::Time::now() - startTime;
+        printf ("time used: %f \n",(ros::Time::now().toSec() - startTime));
         printf ("package loss numebr: %d\n", package_loss_nu);
     }
 
