@@ -198,7 +198,7 @@ int main(int argc, char **argv)
 	double secondPassed;
 	//variables define
 	int que_ID = minus_Four(U2F00_ID);
-	O2H_ID = 4; // default for ID = 0 to work
+	O2H_ID = 3; // default for ID = 0 to work for ID 0 need to receive ID 3
     while (ros::ok())
     {
 		//startTime = clock();
@@ -262,7 +262,7 @@ int main(int argc, char **argv)
         if (loop_time < 0.02){
 			ros::Duration(0.02 - loop_time).sleep();
 		}   
-		ros:: Duration(4).sleep(); // for test in slow speed 
+		//ros:: Duration(0.5).sleep(); // for test in slow speed 
 		// if shift following two line above, the speed will be 50 Hz.     
 		printf ("time used: %f, accumulated time: %f \n, no of loops: %d", (ros::Time::now().toSec() - time), (ros::Time::now().toSec() - startTime), count);
         printf ("package loss numebr: %d\n", package_loss_nu);
@@ -369,7 +369,7 @@ int minus_Four(int a){ // loop inside 0,1,2,3
 		printf(KRED"use a invalid input in the function add_four"RESET);
 		}
 		if (a == 0){
-			return 4;
+			return 3;
 		}else{
 			return a - 1;	
 	}
