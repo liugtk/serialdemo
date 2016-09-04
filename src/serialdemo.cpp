@@ -161,7 +161,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "serialdemo");
     ros::NodeHandle serialdemo_hdlr("~");
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(10); // previous it is 40
+    ros::Rate loop_rate(50); // previous it is 40
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
     //check for the FCC port name
@@ -194,7 +194,10 @@ int main(int argc, char **argv)
     }
 	//CREATE TIMER;
 	double startTime = (double)ros::Time::now().toSec();
-	int count = 0;
+	double Time_loop = startTime;
+	double Time_loop2 = startTime;
+	int loop_count = 0;
+	int whole_info_loop_count = 0;
 	double secondPassed;
 	//variables define
 	int que_ID = minus_Four(U2F00_ID);
@@ -206,6 +209,8 @@ int main(int argc, char **argv)
         //bufferCheck();
 
         double time = ros::Time::now().toSec();
+        printf(KMAG"time used = %f \n"RESET, time - Time_loop );
+        Time_loop = time;     
         //generate sin functions
         float x = sin(time);//sin(2*PI*10*time);
         float y = cos(time);//sin(2*PI*10*time + PI/2);
@@ -242,21 +247,21 @@ int main(int argc, char **argv)
 		printf("O2H_ID = %d, que_ID = %d\n",O2H_ID, que_ID);
         if (O2H_ID == que_ID){// or timout_flag
 			fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
-			print_sending_msg();
+			//print_sending_msg();
+			whole_info_loop_count++;// may let this start after 4 zigbee connection complete
+			printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
+			Time_loop2 = ros::Time::now().toSec(); 
+			
 		}else{
 			printf(KRED"did not send since is not my queue\n"RESET);
 		}
 		
 		receving_message();
 		if(synced){
-			print_sread();
+			//print_sread();
 		}
 		
-
-	
-        //loop_rate.sleep();
-
-        count ++;
+       /* 
         //ros::Time timeUsed = ros::Time::now() - startTime;
 		double loop_time = (ros::Time::now().toSec() - time);
         if (loop_time < 0.02){
@@ -265,7 +270,13 @@ int main(int argc, char **argv)
 		//ros:: Duration(0.5).sleep(); // for test in slow speed 
 		// if shift following two line above, the speed will be 50 Hz.     
 		printf ("time used: %f, accumulated time: %f \n, no of loops: %d", (ros::Time::now().toSec() - time), (ros::Time::now().toSec() - startTime), count);
-        printf ("package loss numebr: %d\n", package_loss_nu);
+		*/
+		loop_count++;
+        printf ("package loss numebr: %d, percentage : %f \nloops: %d, whole loops count: %d\n", package_loss_nu, package_loss_nu/(double)whole_info_loop_count,loop_count, whole_info_loop_count);
+		
+        loop_rate.sleep();
+
+
     }
 
 
