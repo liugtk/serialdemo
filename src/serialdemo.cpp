@@ -36,6 +36,8 @@ static unsigned long long fccFirstTimestamp = 0;
 void print_sending_msg ();
 void print_sread();
 int receving_message();
+int add_Four(int a);
+int minus_Four(int a);
 /*F2U not use
 #define F2U00_MSG_LENGTH            38
 #define F2U01_MSG_LENGTH            58
@@ -159,7 +161,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "serialdemo");
     ros::NodeHandle serialdemo_hdlr("~");
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(10); // previous it is 40
+    ros::Rate loop_rate(50); // previous it is 40
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
     //check for the FCC port name
@@ -167,6 +169,14 @@ int main(int argc, char **argv)
         printf(KBLU"Retrieved value %s for param 'fccSerialPort'!\n"RESET, fccSerialPort.data());
     else
         printf(KRED "Couldn't retrieve param 'fccSerialPort', using default port %s!\n"RESET, fccSerialPort.data());
+    int ID_read;
+    if (serialdemo_hdlr.getParam("ID", ID_read)){
+		printf(KBLU"Retrived ID = %d for param ID\n"RESET, ID_read );
+		U2F00_ID = ID_read;
+	}else{
+		printf(KRED"can't retrive the ID, please try again.\n"RESET);
+		  exit (EXIT_FAILURE);
+	}
 
     fd.setPort(fccSerialPort.data());
     fd.setBaudrate(57600);
@@ -184,8 +194,14 @@ int main(int argc, char **argv)
     }
 	//CREATE TIMER;
 	double startTime = (double)ros::Time::now().toSec();
-	int count = 0;
+	double Time_loop = startTime;
+	double Time_loop2 = startTime;
+	int loop_count = 0;
+	int whole_info_loop_count = 0;
 	double secondPassed;
+	//variables define
+	int que_ID = minus_Four(U2F00_ID);
+	O2H_ID = 3; // default for ID = 0 to work for ID 0 need to receive ID 3
     while (ros::ok())
     {
 		//startTime = clock();
@@ -193,6 +209,8 @@ int main(int argc, char **argv)
         //bufferCheck();
 
         double time = ros::Time::now().toSec();
+        printf(KMAG"time used = %f \n"RESET, time - Time_loop );
+        Time_loop = time;     
         //generate sin functions
         float x = sin(time);//sin(2*PI*10*time);
         float y = cos(time);//sin(2*PI*10*time + PI/2);
@@ -201,7 +219,7 @@ int main(int argc, char **argv)
         //populate the header values
         U2F00_HEADER1 = 'U';
         U2F00_HEADER2 = 'W';
-        U2F00_ID = 0;
+        //U2F00_ID = 0; defeined at the top when retriving ID
         U2F00_LENGTH_BYTE = U2F00_DATA_LENGTH;
         U2F00_X = x;
         U2F00_Y = y;
@@ -216,55 +234,60 @@ int main(int argc, char **argv)
         unsigned char CSA = 0, CSB = 0;
         for (unsigned char i = 0; i < U2F00_SUMCHECK_LENGTH; i++)
         {
-            CSA = CSA + uwb2FccBuff[4+i];
-            CSB = CSB + CSA;
+            CSA = CSA + uwb2FccBuff[2+i]; //4 - 31
+            CSB = CSB + CSA; // 32
         }
         U2F00_CS1 = CSA;
         U2F00_CS2 = CSB;
 		
-		//testString[0] = 5;
-		//testString[1] = 6;
-		//testString[2] = 4;
-        //Send the message to the FCC
+
         printf ("looping \n");
 		//fd.write(uwb2FccBuff, F2U00_MSG_LENGTH);
-		fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
-		print_sending_msg();
-		
-		//fd.write(testString,10);
-        //printf("hehe \n");
-        //loop_rate.sleep();
-        //for read, start from head from the first time.
-        //int size_read = 	fd.read(sread, 32);
-        //print_sread();
+		// sending,
+		printf("O2H_ID = %d, que_ID = %d\n",O2H_ID, que_ID);
+        if (O2H_ID == que_ID){// or timout_flag
+			fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
+			//print_sending_msg();
+			whole_info_loop_count++;// may let this start after 4 zigbee connection complete
+			printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
+			Time_loop2 = ros::Time::now().toSec(); 
+			
+		}else{
+			printf(KRED"did not send since is not my queue\n"RESET);
+		}
 		
 		receving_message();
 		if(synced){
-			print_sread();
+			//print_sread();
 		}
-        
-        //printf("the received string : %s\n", sread);
 		
-	
-        //loop_rate.sleep();
-        //ros::Duration(1).sleep();
-        //double timeUsed = clock() - startTime;
-        //startTime = clock();
-        count ++;
+       /* 
         //ros::Time timeUsed = ros::Time::now() - startTime;
-        printf ("time used: %f \n, no of loops: %d",(ros::Time::now().toSec() - startTime), count);
-        printf ("package loss numebr: %d\n", package_loss_nu);
+		double loop_time = (ros::Time::now().toSec() - time);
+        if (loop_time < 0.02){
+			ros::Duration(0.02 - loop_time).sleep();
+		}   
+		//ros:: Duration(0.5).sleep(); // for test in slow speed 
+		// if shift following two line above, the speed will be 50 Hz.     
+		printf ("time used: %f, accumulated time: %f \n, no of loops: %d", (ros::Time::now().toSec() - time), (ros::Time::now().toSec() - startTime), count);
+		*/
+		loop_count++;
+        printf ("package loss numebr: %d, percentage : %f \nloops: %d, whole loops count: %d\n", package_loss_nu, package_loss_nu/(double)whole_info_loop_count,loop_count, whole_info_loop_count);
+		
+        loop_rate.sleep();
+
+
     }
 
 
     return 0;
 }
-int receving_message(){
+int receving_message(){// idea to sync and receive message 
 	//sync
-	while(!synced){
+	while(!synced){ 
 		size_t bytes_avail = 0;
 		bytes_avail = fd.available();
-		if (bytes_avail == 0){
+		if (bytes_avail == 0){//search for buffering data, if no buffering data, next loop
 			printf("no buffering data.\n");
 			return -1;
 			}
@@ -273,28 +296,50 @@ int receving_message(){
 			fd.read((uint8_T *)(sread + 1), 1);
 			if(O2H_HEADER2 == 'W'){
 				fd.read((uint8_T *)(sread + 2),30);
-				synced = true;
-				printf ("synced\n");
-				return 1;
+				unsigned char CSA = 0, CSB = 0;
+				for (unsigned char i = 0; i < U2F00_SUMCHECK_LENGTH; i++)
+				{
+					CSA = CSA + sread[2+i]; //4 - 31
+					CSB = CSB + CSA; // 32
+				}
+				printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
+				if (CSA == O2H_CS1 && CSB == O2H_CS2){
+					synced = true;
+					printf (KGRN"synced\n"RESET);
+					return 1;
+				}
 			}
 		}
-		
-
 	}
 	//if synced
-	fd.read(sread, 32);	
-	if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W'){
-		return 1;
-	}else{
-		printf("lost pakage, try sync again \n");
+	if(fd.available() != 0){ // need at least 32
+		fd.read(sread, 32);	
+		unsigned char CSA = 0, CSB = 0;
+		for (unsigned char i = 0; i < U2F00_SUMCHECK_LENGTH; i++)
+		{
+				CSA = CSA + sread[2+i]; //4 - 31
+				CSB = CSB + CSA; // 32
+		}
+		printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
+		if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W' && CSA == O2H_CS1 && CSB == O2H_CS2){
+			printf(KGRN"Matched\n"RESET);
+			return 1;
+		}else{
+			printf("lost pakage, try sync again \n");
+			package_loss_nu ++;
+			synced = false;
+			return 1;
+		}
+	}else {
+		printf("no buffering data. try sync again\n");
 		package_loss_nu ++;
 		synced = false;
-		return 1;
+		return -1;
 	}
 		
 }
 
-void print_sending_msg(){
+void print_sending_msg(){ // used for print msg for sending or local info
 		printf(KBLU"the sending message: ---------------------\n");
         printf ("Header1 = %c\n", U2F00_HEADER1);
 		printf ("Header2 = %c\n", U2F00_HEADER2);
@@ -307,7 +352,7 @@ void print_sending_msg(){
 		printf ("CS1 = %d, CS2 = %d\n"RESET, U2F00_CS1, U2F00_CS2);
 	}
 
-void print_sread(){
+void print_sread(){ //used for print readed msg from others
 	    printf ("the received message: ************************\n");
         printf ("Header1 = %c\n", O2H_HEADER1);
 		printf ("Header2 = %c\n", O2H_HEADER2);
@@ -319,6 +364,29 @@ void print_sread(){
 		printf ("loss = %d\n", O2H_LOSS);
 		printf ("CS1 = %d, CS2 = %d\n", O2H_CS1, O2H_CS2);
 	}
+	
+int add_Four(int a){ // loop inside 0,1,2,3
+	if (a < 0 || a > 3){
+		printf(KRED"use a invalid input in the function add_four"RESET);
+		}
+		if (a == 3){
+			return 0;
+		}else{
+			return a + 1;	
+	}
+}
+int minus_Four(int a){ // loop inside 0,1,2,3
+	if (a < 0 || a > 3){
+		printf(KRED"use a invalid input in the function add_four"RESET);
+		}
+		if (a == 0){
+			return 3;
+		}else{
+			return a - 1;	
+	}
+}
+
+
 /*
 void bufferCheck()
 {

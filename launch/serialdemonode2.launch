@@ -2,9 +2,9 @@
 <launch>
 
 
-<node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node1" output="screen">
-
-	<param name="fccSerialPort" type="string" value="/dev/ttyUSB1" />
+<node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node2" output="screen">
+	<param name="fccSerialPort" type="string" value="/dev/ttyUSB2" />
+	<param name = "ID" type = "int" value = "2" />
   </node>
 
 </launch>
