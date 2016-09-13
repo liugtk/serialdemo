@@ -106,11 +106,17 @@ float F2U01_ANCPOS(int id, int var)
 #define U2F01_MSG_LENGTH            58
 #define U2F_MSG_MAX_LENGTH          U2F01_MSG_LENGTH
 
-static uint8_T uwb2FccBuff[U2F_MSG_MAX_LENGTH];
-//define of read part
 
+
+static uint8_T uwb2FccBuff[U2F_MSG_MAX_LENGTH];
+//freq
+const int single_loop_rate = 30;
+double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop 
+//define of read part
 static uint8_t sread[32];
 static bool synced = 0;
+static bool updated = 0;
+//static bool time_reached = 0;
 static int package_loss_nu = 0;
 #define O2H_HEADER1               (*(uint8_T *)(sread + 0)) //'U'
 #define O2H_HEADER2               (*(uint8_T *)(sread + 1)) //'W'
@@ -161,7 +167,11 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "serialdemo");
     ros::NodeHandle serialdemo_hdlr("~");
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(50); // previous it is 40
+    
+  
+    ros::Rate loop_rate(single_loop_rate); // previous it is 40
+    double rest_after_send = single_loop_rate/2000.0;//half time of the loop 
+    
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
     //check for the FCC port name
@@ -198,6 +208,7 @@ int main(int argc, char **argv)
 	double Time_loop2 = startTime;
 	int loop_count = 0;
 	int whole_info_loop_count = 0;
+	int pkg_loss_100;
 	double secondPassed;
 	//variables define
 	int que_ID = minus_Four(U2F00_ID);
@@ -243,23 +254,36 @@ int main(int argc, char **argv)
 
         printf ("looping \n");
 		//fd.write(uwb2FccBuff, F2U00_MSG_LENGTH);
+		receving_message();
+		if(synced){
+			//print_sread();
+		}		
 		// sending,
 		printf("O2H_ID = %d, que_ID = %d\n",O2H_ID, que_ID);
         if (O2H_ID == que_ID){// or timout_flag
-			fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
-			//print_sending_msg();
-			whole_info_loop_count++;// may let this start after 4 zigbee connection complete
-			printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
-			Time_loop2 = ros::Time::now().toSec(); 
+		
+			if(updated){
+				fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
+				//print_sending_msg();
+				whole_info_loop_count++;// may let this start after 4 zigbee connection complete
+				printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
+				Time_loop2 = ros::Time::now().toSec(); 
+				//ros::Duration(rest_after_send).sleep();// added rest time for waiting 
+			}else {
+				static int loop_accum = 0;
+				loop_accum ++;
+				if (loop_accum > 3){
+					printf (KRED "no response, try send again\n"RESET);
+					fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
+					loop_accum = 0;
+					}
+				
+			}
 			
 		}else{
 			printf(KRED"did not send since is not my queue\n"RESET);
 		}
-		
-		receving_message();
-		if(synced){
-			//print_sread();
-		}
+
 		
        /* 
         //ros::Time timeUsed = ros::Time::now() - startTime;
@@ -272,8 +296,10 @@ int main(int argc, char **argv)
 		printf ("time used: %f, accumulated time: %f \n, no of loops: %d", (ros::Time::now().toSec() - time), (ros::Time::now().toSec() - startTime), count);
 		*/
 		loop_count++;
-        printf ("package loss numebr: %d, percentage : %f \nloops: %d, whole loops count: %d\n", package_loss_nu, package_loss_nu/(double)whole_info_loop_count,loop_count, whole_info_loop_count);
-		
+		if ((loop_count % 100) == 0 )
+			pkg_loss_100 = package_loss_nu;
+        printf ("package loss numebr: %d, percentage : %f%%, percentage for every 100 loops: %d%% \n", package_loss_nu, ((package_loss_nu/(double)loop_count)*100), package_loss_nu - pkg_loss_100 );
+		printf ("loops: %d, whole loops count: %d\n",loop_count, whole_info_loop_count);
         loop_rate.sleep();
 
 
@@ -283,6 +309,7 @@ int main(int argc, char **argv)
     return 0;
 }
 int receving_message(){// idea to sync and receive message 
+	updated = 0;
 	//sync
 	while(!synced){ 
 		size_t bytes_avail = 0;
@@ -305,6 +332,7 @@ int receving_message(){// idea to sync and receive message
 				printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
 				if (CSA == O2H_CS1 && CSB == O2H_CS2){
 					synced = true;
+					updated = true; // updated
 					printf (KGRN"synced\n"RESET);
 					return 1;
 				}
@@ -323,6 +351,7 @@ int receving_message(){// idea to sync and receive message
 		printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
 		if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W' && CSA == O2H_CS1 && CSB == O2H_CS2){
 			printf(KGRN"Matched\n"RESET);
+			updated = true; // updated
 			return 1;
 		}else{
 			printf("lost pakage, try sync again \n");
@@ -334,6 +363,7 @@ int receving_message(){// idea to sync and receive message
 		printf("no buffering data. try sync again\n");
 		package_loss_nu ++;
 		synced = false;
+		ros::Duration(rest_after_sync).sleep(); //
 		return -1;
 	}
 		
