@@ -40,7 +40,7 @@ int minus_Four(int a);
 //********************Global variable define
 //********************variable define
 //********************freq
-const int single_loop_rate = 30;
+const int single_loop_rate = 5;
 double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop 
 
 //********************the global variable used
