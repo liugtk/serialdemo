@@ -149,7 +149,7 @@ int main(int argc, char **argv)
 	int loop_count = 0;
 	int whole_info_loop_count = 0;
 	int pkg_loss_100;
-	double secondPassed;
+	
 	//variables define
 	int que_ID = minus_Four(local_ID);
 	O2H_ID = 3; // default for ID = 0 to work for ID 0 need to receive ID 3
