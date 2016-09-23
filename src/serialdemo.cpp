@@ -42,6 +42,7 @@ int minus_Four(int a);
 //********************freq
 const int single_loop_rate = 5;
 double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop 
+const int NodeNo = 3;
 
 //********************the global variable used
 static bool synced = 0;
@@ -107,14 +108,12 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "serialdemo");
     ros::NodeHandle serialdemo_hdlr("~");
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    
-  
     ros::Rate loop_rate(single_loop_rate); // previous it is 40
-    double rest_after_send = single_loop_rate/2000.0;//half time of the loop 
+   
     
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
-    //check for the FCC port name
+    //check for the FCC pot and the ID for the UAV
     if(serialdemo_hdlr.getParam("fccSerialPort", fccSerialPort))
         printf(KBLU"Retrieved value %s for param 'fccSerialPort'!\n"RESET, fccSerialPort.data());
     else
@@ -152,13 +151,9 @@ int main(int argc, char **argv)
 	
 	//variables define
 	int que_ID = minus_Four(local_ID);
-	O2H_ID = 3; // default for ID = 0 to work for ID 0 need to receive ID 3
+	O2H_ID = NodeNo - 1; // default for ID = 0 to work, need to receive NodeNo - 1
     while (ros::ok())
     {
-	//startTime = clock();
-        //check the buffer and display the data
-        //bufferCheck();
-
         double time = ros::Time::now().toSec();
         printf(KMAG"time used = %f \n"RESET, time - Time_loop );
         Time_loop = time;     
@@ -206,8 +201,7 @@ int main(int argc, char **argv)
 				//print_sending_msg();
 				whole_info_loop_count++;// may let this start after 4 zigbee connection complete
 				printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
-				Time_loop2 = ros::Time::now().toSec(); 
-				//ros::Duration(rest_after_send).sleep();// added rest time for waiting 
+				Time_loop2 = ros::Time::now().toSec();  
 			}else {
 				static int loop_accum = 0;
 				loop_accum ++;
@@ -321,22 +315,22 @@ void print_sread(){ //used for print readed msg from others
 		printf ("CS1 = %d, CS2 = %d\n", O2H_CS1, O2H_CS2);
 	}
 	
-int add_Four(int a){ // loop inside 0,1,2,3
-	if (a < 0 || a > 3){
+int add_Four(int a){ // loop inside 0,1,2,3... NodeNo -1
+	if (a < 0 || a > (NodeNo -1)){
 		printf(KRED"use a invalid input in the function add_four"RESET);
 		}
-		if (a == 3){
+		if (a == (NodeNo -1)){
 			return 0;
 		}else{
 			return a + 1;	
 	}
 }
-int minus_Four(int a){ // loop inside 0,1,2,3
-	if (a < 0 || a > 3){
+int minus_Four(int a){ // loop inside 0,1,2,3 .... NodeNo -1
+	if (a < 0 || a > (NodeNo -1)){
 		printf(KRED"use a invalid input in the function add_four"RESET);
 		}
 		if (a == 0){
-			return 3;
+			return (NodeNo -1 );
 		}else{
 			return a - 1;	
 	}
