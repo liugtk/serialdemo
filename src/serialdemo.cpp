@@ -40,13 +40,16 @@ int minus_Four(int a);
 //********************Global variable define
 //********************variable define
 //********************freq
-const int single_loop_rate = 5;
+const int single_loop_rate = 20;
 double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop 
 const int NodeNo = 3;
 
 //********************the global variable used
 static bool synced = 0;
 static bool updated = 0;
+static bool speaking = 0;
+static bool listening = 1;
+static bool listener_time_out = 0;
 //static bool time_reached = 0;
 static int package_loss_nu = 0;
 
@@ -55,11 +58,12 @@ static int package_loss_nu = 0;
 
 //********************Frame's initials
 #define local_MSG_LENGTH            32
+const double receve_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10 ms for extra wait
 //define of read part
 static uint8_t swrite[local_MSG_LENGTH];
 static uint8_t sread[local_MSG_LENGTH];
-
-//*******************OUT to Here : H2O
+static uint8_t sread_bak[local_MSG_LENGTH];
+//*******************OUT to Here : O2H
 #define O2H_HEADER1               (*(uint8_T *)(sread + 0)) //'U'
 #define O2H_HEADER2               (*(uint8_T *)(sread + 1)) //'W'
 
@@ -146,17 +150,18 @@ int main(int argc, char **argv)
 	double Time_loop = startTime;
 	double Time_loop2 = startTime;
 	int loop_count = 0;
-	int whole_info_loop_count = 0;
-	int pkg_loss_100;
+	
+
 	
 	//variables define
 	int que_ID = minus_Four(local_ID);
 	O2H_ID = NodeNo - 1; // default for ID = 0 to work, need to receive NodeNo - 1
     while (ros::ok())
     {
-        double time = ros::Time::now().toSec();
+        double time = ros::Time::now().toSec(); // counting the time
         printf(KMAG"time used = %f \n"RESET, time - Time_loop );
         Time_loop = time;     
+        //**********************************updating the infomation
         //generate sin functions
         float x = sin(time);//sin(2*PI*10*time);
         float y = cos(time);//sin(2*PI*10*time + PI/2);
@@ -186,107 +191,109 @@ int main(int argc, char **argv)
         local_CS1 = CSA;
         local_CS2 = CSB;
 
-        printf ("looping \n");
-		//fd.write(swrite, F2U00_MSG_LENGTH);
-		receving_message();
-		if(synced){
+	
+		while (listening){ // listen first
+			//static listen_timer = ros::Time::now().ToSec();
+			receving_message();
 			//print_sread();
-		}		
-		// sending,
-		printf("O2H_ID = %d, que_ID = %d\n",O2H_ID, que_ID);
-        if (O2H_ID == que_ID){// or timout_flag
-		
-			if(updated){
-				fd.write(swrite, local_MSG_LENGTH);
-				//print_sending_msg();
-				whole_info_loop_count++;// may let this start after 4 zigbee connection complete
-				printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
-				Time_loop2 = ros::Time::now().toSec();  
-			}else {
-				static int loop_accum = 0;
-				loop_accum ++;
-				if (loop_accum > 3){
-					printf (KRED "no response, try send again\n"RESET);
-					fd.write(swrite, local_MSG_LENGTH);
-					loop_accum = 0;
-					}
-			}			
-		}else{
-			printf(KRED"did not send since is not my queue\n"RESET);
+			if ( (O2H_ID == que_ID) && (updated || listener_time_out)  ){ // under receive ID = que_ID, if receive ID is updated or listener has time out, send again
+				speaking = 1;
+				listening = !speaking;
+				updated = 0;    // reset both back to 0 and wait for the next listen period.
+				listener_time_out = 0;
+				}
 		}
-
+		while(speaking){ //immediately talk after listen
+			fd.write(swrite, local_MSG_LENGTH);
+			//print_sending_msg();
+			speaking = 0;
+			listening = !speaking;
+		}
 		loop_count++;
-		if ((loop_count % 100) == 0 )
-			pkg_loss_100 = package_loss_nu;
-        	printf ("package loss numebr: %d, percentage : %f%%, percentage for every 100 loops: %d%% \n", package_loss_nu, ((package_loss_nu/(double)loop_count)*100), package_loss_nu - pkg_loss_100 );
-		printf ("loops: %d, whole loops count: %d\n",loop_count, whole_info_loop_count);
-        	loop_rate.sleep();
+
+        	printf ("package loss numebr: %d, \n", package_loss_nu );
+		printf ("loops: %d, \n",loop_count);
+        	//loop_rate.sleep();
 	}
     	return 0;
   }
 
-int receving_message(){// idea to sync and receive message 
-	updated = 0;
+int receving_message(){// idea to sync and receive message , at least receive a synced message or time_out
 	//sync
-	while(!synced){ 
-		size_t bytes_avail = 0;
-		bytes_avail = fd.available();
-		if (bytes_avail == 0){//search for buffering data, if no buffering data, next loop
-			printf("no buffering data.\n");
-			return -1;
+	double receve_timer = ros::Time::now().toSec(); // counting the time
+	
+	while(1){
+		if (fd.available() >= local_MSG_LENGTH){ // >= enough bytes
+				while(!synced){ 
+					fd.read((uint8_T *)(sread + 0), 1);
+					//try sync
+					if (O2H_HEADER1 == 'U') {//UW the hearder	
+						fd.read((uint8_T *)(sread + 1), 1);
+						if(O2H_HEADER2 == 'W'){
+							// back up the previous data 
+							memcpy(sread_bak,sread, local_MSG_LENGTH );// dest: sread_bak, source: sread
+							fd.read((uint8_T *)(sread + 2),local_MSG_LENGTH -2 );
+							unsigned char CSA = 0, CSB = 0;
+							for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
+							{
+								CSA = CSA + sread[2+i]; //4 - 31
+								CSB = CSB + CSA; // 32
+							}
+							printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
+							if (CSA == O2H_CS1 && CSB == O2H_CS2){
+								synced = true;
+								updated = true; // updated
+								//print_sread();// two of this in receve
+								printf (KGRN"synced\n"RESET);
+								return 1;
+							}else{ // failed, by default, synced = false, update = false
+								memcpy(sread + 2,sread_bak + 2, local_MSG_LENGTH - 2 );
+								break; // jump out
+								//no return, will try resync
+								receve_timer = ros::Time::now().toSec(); // update timer for another count
+							}
+						}//W
+					}//U
+					//after trying to sync, if buffer become empty
+					if (fd.available() == 0){ //break back to receive function, update the timer for time out
+						break; // jump out
+						//no return, will try resync
+						receve_timer = ros::Time::now().toSec();
+					}
 			}
-		fd.read((uint8_T *)(sread + 0), 1);
-		if (O2H_HEADER1 == 'U') {//UW the hearder	
-			fd.read((uint8_T *)(sread + 1), 1);
-			if(O2H_HEADER2 == 'W'){
-				fd.read((uint8_T *)(sread + 2),local_MSG_LENGTH -2 );
+			if (synced){
+				memcpy(sread_bak,sread, local_MSG_LENGTH ); //back up sread to sread_bak
+				fd.read(sread, local_MSG_LENGTH);	
 				unsigned char CSA = 0, CSB = 0;
 				for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
 				{
-					CSA = CSA + sread[2+i]; //4 - 31
-					CSB = CSB + CSA; // 32
+						CSA = CSA + sread[2+i]; //4 - 31
+						CSB = CSB + CSA; // 32
 				}
 				printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
-				if (CSA == O2H_CS1 && CSB == O2H_CS2){
-					synced = true;
+				if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W' && CSA == O2H_CS1 && CSB == O2H_CS2){ // check all 4 directly
+					// if correct, updated, return to main function and see if ID match the que
+					printf(KGRN"Matched\n"RESET);
 					updated = true; // updated
-					printf (KGRN"synced\n"RESET);
+					//print_sread();//two of this in receive
 					return 1;
+				}else{ // 1. restore, 2.package loss count, 3. synced turn off 4 update the time out and retry the receiving
+					printf("lost pakage, try sync again \n");
+					memcpy(sread + 2,sread_bak + 2, local_MSG_LENGTH - 2 );
+					package_loss_nu ++;
+					synced = false;
+					//no return, will check length again and try resync
+					receve_timer = ros::Time::now().toSec(); // update the timer for another count
 				}
 			}
 		}
-	}
-	//if synced
-	if(fd.available() != 0){ // need at least 32
-		fd.read(sread, local_MSG_LENGTH);	
-		unsigned char CSA = 0, CSB = 0;
-		for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
-		{
-				CSA = CSA + sread[2+i]; //4 - 31
-				CSB = CSB + CSA; // 32
+		// if not enough bety in the buffer
+		if ((ros::Time::now().toSec() - receve_timer) > receve_time_out){
+				listener_time_out = 1;
+				printf(KRED"time_out\n"RESET);
+				return -1;
 		}
-		printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
-		if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W' && CSA == O2H_CS1 && CSB == O2H_CS2){
-			printf(KGRN"Matched\n"RESET);
-			updated = true; // updated
-			return 1;
-		}else{
-			printf("lost pakage, try sync again \n");
-			package_loss_nu ++;
-			synced = false;
-			return 1;
-		}
-	}else if (fd.available() == 0 ){
-		printf("no buffering data. try sync again\n");
-		package_loss_nu ++;
-		synced = false;
-		ros::Duration(rest_after_sync).sleep(); //
-		return -1;
-	}else{
-		printf("there is not enough data \n");
-		return -1;
-	}
-		
+	}	// under while (1)
 }
 
 void print_sending_msg(){ // used for print msg for sending or local info
