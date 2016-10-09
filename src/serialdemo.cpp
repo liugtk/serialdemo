@@ -40,9 +40,9 @@ int loop_minus(int a);
 //********************Global variable define
 //********************variable define
 //********************freq
-const int single_loop_rate = 40;
+static int single_loop_rate = 20;
 double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop
-const int NodeNo = 3;
+static int NodeNo = 3;
 
 //********************the global variable used
 static bool synced = 0;
@@ -59,7 +59,7 @@ static int package_loss_nu = 0;
 
 //********************Frame's initials
 #define local_MSG_LENGTH            32
-const double receive_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10 ms for extra wait
+static double receive_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10 ms for extra wait
 //define of read part
 static uint8_t swrite[local_MSG_LENGTH];
 static uint8_t sread[local_MSG_LENGTH];
@@ -129,6 +129,31 @@ int main(int argc, char **argv)
         local_ID = ID_read;
     }else{
         printf(KRED"can't retrive the ID, please try again.\n"RESET);
+        exit (EXIT_FAILURE);
+    }
+    // get param NodeNo, freq, timeout 
+    int NodeNo_read;
+    if (serialdemo_hdlr.getParam("nodeNo",NodeNo_read )){
+        printf(KBLU"Retrived NodeNo = %d for param Node number\n"RESET, NodeNo_read );
+        NodeNo = NodeNo_read;
+    }else{
+        printf(KRED"can't retrive the NodeNo, please try again.\n"RESET);
+        exit (EXIT_FAILURE);
+    }
+    int rate_read;
+    if (serialdemo_hdlr.getParam("rate",rate_read )){
+        printf(KBLU"Retrived rate = %d for param single_loop_rate\n"RESET, rate_read );
+        single_loop_rate = rate_read;
+    }else{
+        printf(KRED"can't retrive the rate, please try again.\n"RESET);
+        exit (EXIT_FAILURE);
+    }
+    double timeout_read;
+    if (serialdemo_hdlr.getParam("timeout",timeout_read )){
+        printf(KBLU"Retrived timeout_read = %f for param receive_time_out\n"RESET, timeout_read );
+        receive_time_out = timeout_read;
+    }else{
+        printf(KRED"can't retrive the timeout_read, please try again.\n"RESET);
         exit (EXIT_FAILURE);
     }
 

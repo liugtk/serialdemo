@@ -1,10 +1,19 @@
 <?xml version="1.0"?>
 <launch>
 
+	<!-- declare arg to be passed in -->
+	<arg name="nodeNo" /> 
+	<arg name="rate" /> 
+	<arg name="timeout" /> 
 
 <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node2" output="screen">
 	<param name="fccSerialPort" type="string" value="/dev/ttyUSB2" />
 	<param name = "ID" type = "int" value = "2" />
+	
+	<!-- read value of arg -->
+	<param name="nodeNo" value="$(arg nodeNo)"/>
+	<param name="rate" value="$(arg rate)"/>
+	<param name="timeout" type="double" value="$(arg timeout)"/>
   </node>
 
 </launch>
