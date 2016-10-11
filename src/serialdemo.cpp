@@ -109,8 +109,13 @@ typedef unsigned char uint8_T;
 typedef unsigned short uint16_T;  // NOLINT
 typedef unsigned int uint32_T;  // NOLINT
 
-// char = 8bits, 2 0x
 
+static int package_loss_nu = 0;
+static int suc_receive_nu = 0;
+static int fail_receive_nu = 0;
+static int skip_nu = 0;
+static bool synced = 0;
+int receving_message();
 
 //********************Frame's initials
 #define local_MSG_LENGTH            42
@@ -144,6 +149,33 @@ static uint8_T swrite[local_MSG_LENGTH];
 
 #define local_SUMCHECK_LENGTH       38  // from the Frame type 3 to local_DZ 40
 
+//define of the read port
+#define receive_MSG_LENGTH         40
+// don have the Frame ID and the broadcast_r
+static uint8_T sread[receive_MSG_LENGTH];
+static uint8_T sread_bak[receive_MSG_LENGTH];
+#define O2H_SD          		    (*(uint8_T *)(sread + 0)) //0x7E
+#define O2H_Length1                 (*(uint8_T *)(sread + 1)) // 1.2   0xXX XX total bytes - 4 (most likely, start delimiter(1), length(2) and checksum(1) ),  40 (add the 0) - 4=36 = 0x0024
+#define O2H_Length2                 (*(uint8_T *)(sread + 2))
+#define O2H_FrameType           	(*(uint8_T *)(sread + 3)) // 3  0x90 Transmit Request
+#define O2H_64Addr1             	(*(uint32_T *)(sread + 4)) //4-7
+#define O2H_64Addr2                 (*(uint32_T *)(sread + 8)) // 8-11
+#define O2H_16Addr                  (*(uint16_T *)(sread + 12)) // 12,13 0xFF FE
+#define O2H_Options             	(*(uint8_T *)(sread + 14)) //14 0xC1
+//RF data
+
+#define O2H_X                       (*(float *)(sread + 15)) //15 16 17 18
+#define O2H_Y                       (*(float *)(sread + 19)) //19 20 21 22
+#define O2H_Z                       (*(float *)(sread + 23)) //23 24 25 26
+#define O2H_DX                      (*(float *)(sread + 27)) //27 28 29 30
+#define O2H_DY                      (*(float *)(sread + 31)) //31 32 33 34
+#define O2H_DZ                      (*(float *)(sread + 35)) //35 36 37 38
+
+#define O2H_CS                      (*(uint8_T *)(sread + 39)) //39
+
+#define O2H_SUMCHECK_LENGTH       36  // from the Frame type 3 to local_DZ 38
+
+
 serial::Serial fd;
 
 
@@ -153,7 +185,7 @@ int main(int argc, char **argv)
     ros::NodeHandle serialdemo_hdlr("~");
 
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(2); // previous it is 40
+    ros::Rate loop_rate(50); // previous it is 40
     /*
 
     //FCC interfacing
@@ -201,6 +233,36 @@ int main(int argc, char **argv)
 
 
     string fccSerialPort = string("/dev/ttyUSB0");
+    //check for the FCC pot and the ID for the UAV
+    if(serialdemo_hdlr.getParam("fccSerialPort", fccSerialPort))
+        printf(KBLU"Retrieved value %s for param 'fccSerialPort'!\n"RESET, fccSerialPort.data());
+    else
+        printf(KRED "Couldn't retrieve param 'fccSerialPort', using default port %s!\n"RESET, fccSerialPort.data());
+    int mac_addr1_read;
+    if (serialdemo_hdlr.getParam("MAC_Addr1", mac_addr1_read))
+    {
+        printf(KBLU"Retrived mac_addr1_read = %08x for param MAC_Addr1\n"RESET, mac_addr1_read );
+        local_64Addr1 = mac_addr1_read;
+    }
+    else
+    {
+        printf(KRED"can't retrive the mac_addr1_read, please try again.\n"RESET);
+        exit (EXIT_FAILURE);
+    }
+    int mac_addr2_read;
+    if (serialdemo_hdlr.getParam("MAC_Addr2", mac_addr2_read))
+    {
+        printf(KBLU"Retrived mac_addr2_read = %08x for param MAC_Addr2\n"RESET, mac_addr2_read );
+        local_64Addr2 = mac_addr2_read;
+    }
+    else
+    {
+        printf(KRED"can't retrive the mac_addr2_read, please try again.\n"RESET);
+        exit (EXIT_FAILURE);
+    }
+
+    // need to get the MAC address for destination
+
     fd.setPort(fccSerialPort.data());
     fd.setBaudrate(57600);
     fd.setTimeout(5, 10, 2, 10, 2);
@@ -232,6 +294,10 @@ int main(int argc, char **argv)
          flag_timeout_timer = 1;
      }
      */
+
+    //CREATE TIMER;
+    double startTime = (double)ros::Time::now().toSec();
+    double Time_loop = startTime;
     while (ros::ok())
     {
         /*
@@ -319,6 +385,10 @@ int main(int argc, char **argv)
         printf ("loops: %d, \n",loop_count);
         loop_rate.sleep();
 */
+
+        double time = ros::Time::now().toSec(); // counting the time
+        printf(KMAG"time used = %f \n"RESET, time - Time_loop );
+        Time_loop = time;
         float x = 10.0;
         float y = 20.0;
         float z = 30.0;
@@ -327,8 +397,8 @@ int main(int argc, char **argv)
         local_Length2 = 0x26;
         local_FrameType = 0x10;
         local_FrameID = 0x00;
-        local_64Addr1 = 0x00A21300; // remember to swap,  0013A20040A1C930
-        local_64Addr2 = 0x30C9A140; // remenber to swap.
+        //local_64Addr1 = 0x00A21300; // remember to swap,  0013A20040A1C930
+        //local_64Addr2 = 0x30C9A140; // remenber to swap.
         local_16Addr = 0xFEFF;       // remember to swap.
         local_Broadcast_r = 0x00;
         local_Options = 0x00;
@@ -344,12 +414,41 @@ int main(int argc, char **argv)
             CSA = CSA + swrite[3+i]; //3 - 40
         }
         local_CS = 0xFF - CSA;
-        for (int i = 0; i <= local_MSG_LENGTH; i++)
+        printf ("********sending********** \n");
+
+        for (int i = 0; i < local_MSG_LENGTH; i++)
         {
             printf("%02x ", swrite[i]);
         }
         printf("\n");
         fd.write(swrite, local_MSG_LENGTH);
+
+
+        if (fd.available() >= receive_MSG_LENGTH) // >= enough bytes
+        {
+            //read
+            if (receving_message()) //only when message is successfully
+            {
+                printf("good\n");
+                suc_receive_nu ++;
+            }
+            else
+            {
+                printf("bad\n");
+                fail_receive_nu++;
+            }
+        }
+        else
+        {
+           printf("No enough bytes in buffer\n");
+           //if (suc_receive_nu && suc_receive_nu <= 1000)
+           if (suc_receive_nu)
+           {
+               skip_nu ++;
+           }
+        }
+        printf(KRED"good: %d, bad: %d, skip: %d\n"RESET,suc_receive_nu,fail_receive_nu, skip_nu);
+
         loop_rate.sleep();
     }
 
@@ -358,7 +457,6 @@ int main(int argc, char **argv)
 
     return 0;
 }
-/*
 
 int receving_message(){
     //sync
@@ -367,29 +465,28 @@ int receving_message(){
     {
         fd.read((uint8_T *)(sread + 0), 1);
         //try sync
-        if (O2H_HEADER1 == 'U') {//UW the hearder
-            fd.read((uint8_T *)(sread + 1), 1);
-            if(O2H_HEADER2 == 'W'){
-                // back up the previous data
-                memcpy(sread_bak,sread, local_MSG_LENGTH );// dest: sread_bak, source: sread
-                fd.read((uint8_T *)(sread + 2),local_MSG_LENGTH -2 );
-                unsigned char CSA = 0, CSB = 0;
-                for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
-                {
-                    CSA = CSA + sread[2+i]; //4 - 31
-                    CSB = CSB + CSA; // 32
-                }
-                printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
-                if (CSA == O2H_CS1 && CSB == O2H_CS2){
-                    synced = true;
-                    print_sread();// two of this in receive
-                    printf (KGRN"synced\n"RESET);
-                    return 1;
-                }else{ // failed, by default, synced = false, restore the memory, return -1 indicate unsuccessful
-                    memcpy(sread + 2,sread_bak + 2, local_MSG_LENGTH - 2 );
-                    return -1;
-                }
-            }//W
+        if (O2H_SD == 0x7E)    // SD = 7E
+        {
+            // back up the previous data
+            memcpy(sread_bak,sread, receive_MSG_LENGTH );// dest: sread_bak, source: sread
+            fd.read((uint8_T *)(sread + 1),receive_MSG_LENGTH - 1 );
+            unsigned char CSA = 0;
+            for (unsigned char i = 0; i < O2H_SUMCHECK_LENGTH; i++)
+            {
+                CSA = CSA + swrite[3+i]; //3 - 38
+            }
+            CSA = 0xFF - CSA;
+            printf (KYEL"the CSA = %d , the recevied: CS1 = %d"RESET, CSA, O2H_CS );
+            if (CSA == O2H_CS){
+                synced = true;
+                //print_sread();// two of this in receive
+                printf (KGRN"synced\n"RESET);
+                return 1;
+            }else{ // failed, by default, synced = false, restore the memory, return -1 indicate unsuccessful
+                memcpy(sread ,sread_bak , receive_MSG_LENGTH );
+                return -1;
+            }
+
         }//U
         //after trying to sync, if buffer become empty
         if (fd.available() == 0)
@@ -399,25 +496,25 @@ int receving_message(){
     }
     if (synced)
     {
-        memcpy(sread_bak,sread, local_MSG_LENGTH ); //back up sread to sread_bak
-        fd.read(sread, local_MSG_LENGTH);
-        unsigned char CSA = 0, CSB = 0;
-        for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
+        memcpy(sread_bak,sread, receive_MSG_LENGTH ); //back up sread to sread_bak
+        fd.read(sread, receive_MSG_LENGTH);
+        unsigned char CSA = 0;
+        for (unsigned char i = 0; i < O2H_SUMCHECK_LENGTH; i++)
         {
-            CSA = CSA + sread[2+i]; //4 - 31
-            CSB = CSB + CSA; // 32
+            CSA = CSA + swrite[3+i]; //3 - 38
         }
-        printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
-        if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W' && CSA == O2H_CS1 && CSB == O2H_CS2){ // check all 4 directly
+        CSA = 0xFF - CSA;
+        printf (KYEL"the CSA = %d , the recevied: CS1 = %d"RESET, CSA, O2H_CS );
+        if (CSA == O2H_CS && O2H_SD == 0x7E){ // check all 4 directly
             // if correct, updated, return to main function and see if ID match the que
             printf(KGRN"Matched\n"RESET);
-            print_sread();//two of this in receive
+            //print_sread();//two of this in receive
             return 1;
         }
         else
         { // 1. restore, 2.package loss count, 3. synced turn off 4. return -1 to indicate the unsuccessful receive
             printf("lost pakage, try sync again \n");
-            memcpy(sread + 2,sread_bak + 2, local_MSG_LENGTH - 2 );
+            memcpy(sread ,sread_bak , receive_MSG_LENGTH  );
             package_loss_nu ++;
             synced = false;
             return -1;
@@ -426,7 +523,7 @@ int receving_message(){
     }
 
 }
-
+/*
 void print_sending_msg()
 { // used for print msg for sending or local info
     printf(KBLU"the sending message: ---------------------\n");

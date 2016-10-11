@@ -2,25 +2,16 @@
 <launch>
 
 
-	<!-- declare arg to be passed in -->
-	<arg name="nodeNo" /> 
-	<arg name="rate" /> 
-	<arg name="timeout" /> 
+
  
  
- <!-- serial demo node -->
+ <!-- serial demo node  -->
   <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node0" output="screen">
 	<param name="fccSerialPort" type="string" value="/dev/ttyUSB0" />
 	<param name = "ID" type = "int" value = "0" />
-	
+        <param name = "MAC_Addr1"   value = "10621696" />       <!-- this is signed int, take care if the MAC address start with F  -->
+        <param name = "MAC_Addr2"  value = "818520384" />
 
-	
-	<!-- read value of arg -->
-	<param name="nodeNo" value="$(arg nodeNo)"/>
-	<param name="rate" value="$(arg rate)"/>
-	<param name="timeout" type="double" value="$(arg timeout)"/>
-	
-	
   </node>
 
  <!-- <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node1" output="screen">
