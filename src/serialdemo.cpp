@@ -21,7 +21,7 @@
 #define RESET "\033[0m"
 
 #define PI 3.14
-
+/*
 //_____________________________________________________________________________
 //
 // FCC Serial Communications
@@ -102,8 +102,47 @@ static uint8_t sread_bak[local_MSG_LENGTH];
 #define local_CS2                   (*(uint8_T *)(swrite + 31))
 #define local_SUMCHECK_LENGTH       28
 #define local_DATA_LENGTH           26
+*/
 
 using namespace std;
+typedef unsigned char uint8_T;
+typedef unsigned short uint16_T;  // NOLINT
+typedef unsigned int uint32_T;  // NOLINT
+
+// char = 8bits, 2 0x
+
+
+//********************Frame's initials
+#define local_MSG_LENGTH            42
+
+//define of read part
+static uint8_T swrite[local_MSG_LENGTH];
+
+
+
+#define local_SD          		   (*(uint8_T *)(swrite + 0)) //0x7E
+#define local_Length1               (*(uint16_T *)(swrite + 1)) // 1.2   0xXX XX total bytes - 4 (most likely, start delimiter(1), length(2) and checksum(1) ),  42 (add the 0) - 4=38 = 0x26
+#define local_Length2               (*(uint16_T *)(swrite + 2))
+#define local_FrameType          	(*(uint8_T *)(swrite + 3)) // 3  0x10 Transmit Request
+#define local_FrameID				(*(uint8_T *)(swrite + 4)) // 4 0x00  or other number use 00 means no response
+
+#define local_64Addr1				(*(uint32_T *)(swrite + 5)) //5678 9abc 5 to 8
+#define local_64Addr2               (*(uint32_T *)(swrite + 9)) //5678 9abc 9 to 12
+#define local_16Addr				(*(uint16_T *)(swrite + 13)) // 13,14 0xFF FE
+#define local_Broadcast_r			(*(uint8_T *)(swrite + 15)) // 15, 0x00 00 max hop times
+#define local_Options				(*(uint8_T *)(swrite + 16)) //16 0x00 by default
+//RF data
+
+#define local_X                     (*(float *)(swrite + 17)) //17 18 19 20
+#define local_Y                     (*(float *)(swrite + 21)) //21 22 23 24
+#define local_Z                     (*(float *)(swrite + 25)) //25 26 27 28
+#define local_DX                    (*(float *)(swrite + 29)) //29 30 31 32
+#define local_DY                    (*(float *)(swrite + 33)) //33 34 35 36
+#define local_DZ                    (*(float *)(swrite + 37)) //37 38 39 40
+
+#define local_CS                   (*(uint8_T *)(swrite + 41)) //41
+
+#define local_SUMCHECK_LENGTH       38  // from the Frame type 3 to local_DZ 40
 
 serial::Serial fd;
 
@@ -112,9 +151,10 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "serialdemo");
     ros::NodeHandle serialdemo_hdlr("~");
-    //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(single_loop_rate); // previous it is 40
 
+    //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
+    ros::Rate loop_rate(2); // previous it is 40
+    /*
 
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
@@ -131,7 +171,7 @@ int main(int argc, char **argv)
         printf(KRED"can't retrive the ID, please try again.\n"RESET);
         exit (EXIT_FAILURE);
     }
-    // get param NodeNo, freq, timeout 
+    // get param NodeNo, freq, timeout
     int NodeNo_read;
     if (serialdemo_hdlr.getParam("nodeNo",NodeNo_read )){
         printf(KBLU"Retrived NodeNo = %d for param Node number\n"RESET, NodeNo_read );
@@ -156,7 +196,11 @@ int main(int argc, char **argv)
         printf(KRED"can't retrive the timeout_read, please try again.\n"RESET);
         exit (EXIT_FAILURE);
     }
+*/
 
+
+
+    string fccSerialPort = string("/dev/ttyUSB0");
     fd.setPort(fccSerialPort.data());
     fd.setBaudrate(57600);
     fd.setTimeout(5, 10, 2, 10, 2);
@@ -171,6 +215,7 @@ int main(int argc, char **argv)
         printf(KRED "serialInit: Failed to open port %s\n" RESET, fccSerialPort.data());
         return 0;
     }
+    /*
     //CREATE TIMER;
     double startTime = (double)ros::Time::now().toSec();
     double Time_loop = startTime;
@@ -186,8 +231,10 @@ int main(int argc, char **argv)
     {
          flag_timeout_timer = 1;
      }
+     */
     while (ros::ok())
     {
+        /*
         double time = ros::Time::now().toSec(); // counting the time
         printf(KMAG"time used = %f \n"RESET, time - Time_loop );
         Time_loop = time;
@@ -271,9 +318,47 @@ int main(int argc, char **argv)
         printf ("package loss numebr: %d, \n", package_loss_nu );
         printf ("loops: %d, \n",loop_count);
         loop_rate.sleep();
+*/
+        float x = 10.0;
+        float y = 20.0;
+        float z = 30.0;
+        local_SD = 0x7E;
+        local_Length1 = 0x00;
+        local_Length2 = 0x26;
+        local_FrameType = 0x10;
+        local_FrameID = 0x00;
+        local_64Addr1 = 0x00A21300; // remember to swap,  0013A20040A1C930
+        local_64Addr2 = 0x30C9A140; // remenber to swap.
+        local_16Addr = 0xFEFF;       // remember to swap.
+        local_Broadcast_r = 0x00;
+        local_Options = 0x00;
+        local_X = x;
+        local_Y = y;
+        local_Z = z;
+        local_DX = -x;
+        local_DY = -y;
+        local_DZ = -z;
+        unsigned char CSA = 0;
+        for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
+        {
+            CSA = CSA + swrite[3+i]; //3 - 40
+        }
+        local_CS = 0xFF - CSA;
+        for (int i = 0; i <= local_MSG_LENGTH; i++)
+        {
+            printf("%02x ", swrite[i]);
+        }
+        printf("\n");
+        fd.write(swrite, local_MSG_LENGTH);
+        loop_rate.sleep();
     }
+
+
+
+
     return 0;
 }
+/*
 
 int receving_message(){
     //sync
@@ -393,6 +478,6 @@ int loop_minus(int a)
     }
 }
 
-
+*/
 
 
