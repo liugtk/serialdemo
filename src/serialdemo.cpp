@@ -484,14 +484,14 @@ int receving_message(){
                 return 1;
             }else{ // failed, by default, synced = false, restore the memory, return -1 indicate unsuccessful
                 memcpy(sread ,sread_bak , receive_MSG_LENGTH );
-                return -1;
+                return 0;
             }
 
         }//U
         //after trying to sync, if buffer become empty
         if (fd.available() == 0)
         { // return -1 indicate unsuccessful receive
-            return -1;
+            return 0;
         }
     }
     if (synced)
@@ -517,7 +517,7 @@ int receving_message(){
             memcpy(sread ,sread_bak , receive_MSG_LENGTH  );
             package_loss_nu ++;
             synced = false;
-            return -1;
+            return 0;
 
         }
     }
