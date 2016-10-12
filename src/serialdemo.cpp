@@ -405,9 +405,9 @@ int main(int argc, char **argv)
         local_X = x;
         local_Y = y;
         local_Z = z;
-        local_DX = -x;
-        local_DY = -y;
-        local_DZ = -z;
+        local_DX = x;
+        local_DY = y;
+        local_DZ = z;
         unsigned char CSA = 0;
         for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
         {
@@ -473,7 +473,7 @@ int receving_message(){
             unsigned char CSA = 0;
             for (unsigned char i = 0; i < O2H_SUMCHECK_LENGTH; i++)
             {
-                CSA = CSA + swrite[3+i]; //3 - 38
+                CSA = CSA + sread[3+i]; //3 - 38
             }
             CSA = 0xFF - CSA;
             printf (KYEL"the CSA = %d , the recevied: CS1 = %d"RESET, CSA, O2H_CS );
@@ -501,7 +501,7 @@ int receving_message(){
         unsigned char CSA = 0;
         for (unsigned char i = 0; i < O2H_SUMCHECK_LENGTH; i++)
         {
-            CSA = CSA + swrite[3+i]; //3 - 38
+            CSA = CSA + sread[3+i]; //3 - 38
         }
         CSA = 0xFF - CSA;
         printf (KYEL"the CSA = %d , the recevied: CS1 = %d"RESET, CSA, O2H_CS );
