@@ -52,8 +52,8 @@ static uint8_T swrite[local_MSG_LENGTH];
 
 
 #define local_SD          		   (*(uint8_T *)(swrite + 0)) //0x7E
-#define local_Length1               (*(uint16_T *)(swrite + 1)) // 1.2   0xXX XX total bytes - 4 (most likely, start delimiter(1), length(2) and checksum(1) ),  42 (add the 0) - 4=38 = 0x26
-#define local_Length2               (*(uint16_T *)(swrite + 2))
+#define local_Length1               (*(uint8_T *)(swrite + 1)) // 1.2   0xXX XX total bytes - 4 (most likely, start delimiter(1), length(2) and checksum(1) ),  42 (add the 0) - 4=38 = 0x26
+#define local_Length2               (*(uint8_T *)(swrite + 2))
 #define local_FrameType          	(*(uint8_T *)(swrite + 3)) // 3  0x10 Transmit Request
 #define local_FrameID				(*(uint8_T *)(swrite + 4)) // 4 0x00  or other number use 00 means no response
 
