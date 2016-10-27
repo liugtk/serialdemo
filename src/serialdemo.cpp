@@ -4,6 +4,7 @@
 #include <math.h>
 #include <cstring>
 #include <ctime>
+#include <fstream>
 
 #include "rtwtypes.h"
 
@@ -21,88 +22,14 @@
 #define RESET "\033[0m"
 
 #define PI 3.14
-/*
-//_____________________________________________________________________________
-//
-// FCC Serial Communications
-//_____________________________________________________________________________
-static float fcc_x = 0, fcc_y = 0, fcc_z = 0, fcc_xd = 0, fcc_yd = 0, fcc_zd = 0;
 
-#define     DFLT_FCC_PORT           "/dev/ttyUSB0"
-#define     BAUD_MACRO              B921600
-//function list
-void print_sending_msg ();
-void print_sread();
-int receving_message();
-int loop_add(int a);
-int loop_minus(int a);
+struct LOG_SET {
+    int package_loss_nu;
+    int suc_receive_nu;
+    int fail_receive_nu;
+    int skip_nu;
 
-//********************Global variable define
-//********************variable define
-//********************freq
-static int single_loop_rate = 20;
-double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop
-static int NodeNo = 3;
-
-//********************the global variable used
-static bool synced = 0;
-static bool updated = 0;
-static bool speaking = 0;
-static bool listening = 1;
-static bool listener_time_out = 0;
-static bool flag_timeout_timer = 0;
-//static bool time_reached = 0;
-static int package_loss_nu = 0;
-
-
-
-
-//********************Frame's initials
-#define local_MSG_LENGTH            32
-static double receive_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10 ms for extra wait
-//define of read part
-static uint8_t swrite[local_MSG_LENGTH];
-static uint8_t sread[local_MSG_LENGTH];
-static uint8_t sread_bak[local_MSG_LENGTH];
-//*******************OUT to Here : O2H
-#define O2H_HEADER1               (*(uint8_T *)(sread + 0)) //'U'
-#define O2H_HEADER2               (*(uint8_T *)(sread + 1)) //'W'
-
-#define O2H_ID                    (*(uint8_T *)(sread + 2))
-#define O2H_LENGTH_BYTE           (*(uint8_T *)(sread + 3))
-#define O2H_X                     (*(float *)(sread + 4))
-#define O2H_Y                     (*(float *)(sread + 8))
-#define O2H_Z                     (*(float *)(sread + 12))
-#define O2H_DX                    (*(float *)(sread + 16))
-#define O2H_DY                    (*(float *)(sread + 20))
-#define O2H_DZ                    (*(float *)(sread + 24))
-#define O2H_NODECOUNT             (*(uint8_T *)(sread + 28))
-#define O2H_LOSS                  (*(uint8_T *)(sread + 29))
-
-#define O2H_CS1                   (*(uint8_T *)(sread + 30))
-#define O2H_CS2                   (*(uint8_T *)(sread + 31))
-
-//*************************define of sending part
-
-#define local_HEADER1               (*(uint8_T *)(swrite + 0)) //'U'
-#define local_HEADER2               (*(uint8_T *)(swrite + 1)) //'W'
-
-#define local_ID                    (*(uint8_T *)(swrite + 2))
-#define local_LENGTH_BYTE           (*(uint8_T *)(swrite + 3))
-#define local_X                     (*(float *)(swrite + 4))
-#define local_Y                     (*(float *)(swrite + 8))
-#define local_Z                     (*(float *)(swrite + 12))
-#define local_DX                    (*(float *)(swrite + 16))
-#define local_DY                    (*(float *)(swrite + 20))
-#define local_DZ                    (*(float *)(swrite + 24))
-#define local_NODECOUNT             (*(uint8_T *)(swrite + 28))
-#define local_LOSS                  (*(uint8_T *)(swrite + 29))
-
-#define local_CS1                   (*(uint8_T *)(swrite + 30))
-#define local_CS2                   (*(uint8_T *)(swrite + 31))
-#define local_SUMCHECK_LENGTH       28
-#define local_DATA_LENGTH           26
-*/
+} Log;
 
 using namespace std;
 typedef unsigned char uint8_T;
@@ -110,10 +37,9 @@ typedef unsigned short uint16_T;  // NOLINT
 typedef unsigned int uint32_T;  // NOLINT
 
 
-static int package_loss_nu = 0;
-static int suc_receive_nu = 0;
-static int fail_receive_nu = 0;
-static int skip_nu = 0;
+
+
+
 static bool synced = 0;
 int receving_message();
 
@@ -185,8 +111,8 @@ int main(int argc, char **argv)
     ros::NodeHandle serialdemo_hdlr("~");
 
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(50); // previous it is 40
-    /*
+    ros::Rate loop_rate(20); // previous it is 40
+    /*p
 
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
@@ -230,6 +156,9 @@ int main(int argc, char **argv)
     }
 */
 
+    ofstream myfile ("Logfile.txt");
+    if (!myfile.is_open())
+        printf(KRED"Unable to open file"RESET);
 
 
     string fccSerialPort = string("/dev/ttyUSB0");
@@ -381,7 +310,7 @@ int main(int argc, char **argv)
 
         loop_count++;
 
-        printf ("package loss numebr: %d, \n", package_loss_nu );
+        printf ("package loss numebr: %d, \n",package_loss_nu );
         printf ("loops: %d, \n",loop_count);
         loop_rate.sleep();
 */
@@ -430,24 +359,24 @@ int main(int argc, char **argv)
             if (receving_message()) //only when message is successfully
             {
                 printf("good\n");
-                suc_receive_nu ++;
+                Log.suc_receive_nu ++;
             }
             else
             {
                 printf("bad\n");
-                fail_receive_nu++;
+                Log.fail_receive_nu++;
             }
         }
         else
         {
            printf("No enough bytes in buffer\n");
-           //if (suc_receive_nu && suc_receive_nu <= 1000)
-           if (suc_receive_nu)
+           //if (Log.suc_receive_nu && Log.suc_receive_nu <= 1000)
+           if (Log.suc_receive_nu)
            {
-               skip_nu ++;
+               Log.skip_nu ++;
            }
         }
-        printf(KRED"good: %d, bad: %d, skip: %d\n"RESET,suc_receive_nu,fail_receive_nu, skip_nu);
+        printf(KRED"good: %d, bad: %d, skip: %d\n"RESET,Log.suc_receive_nu,Log.fail_receive_nu, Log.skip_nu);
 
         loop_rate.sleep();
     }
@@ -515,7 +444,7 @@ int receving_message(){
         { // 1. restore, 2.package loss count, 3. synced turn off 4. return -1 to indicate the unsuccessful receive
             printf("lost pakage, try sync again \n");
             memcpy(sread ,sread_bak , receive_MSG_LENGTH  );
-            package_loss_nu ++;
+            Log.package_loss_nu ++;
             synced = false;
             return 0;
 
