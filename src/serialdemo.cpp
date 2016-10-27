@@ -28,6 +28,7 @@ struct LOG_SET {
     int suc_receive_nu;
     int fail_receive_nu;
     int skip_nu;
+    int frame_ID_count = 0;
 
 } Log;
 
@@ -52,8 +53,8 @@ static uint8_T swrite[local_MSG_LENGTH];
 
 
 #define local_SD          		   (*(uint8_T *)(swrite + 0)) //0x7E
-#define local_Length1               (*(uint16_T *)(swrite + 1)) // 1.2   0xXX XX total bytes - 4 (most likely, start delimiter(1), length(2) and checksum(1) ),  42 (add the 0) - 4=38 = 0x26
-#define local_Length2               (*(uint16_T *)(swrite + 2))
+#define local_Length1               (*(uint8_T *)(swrite + 1)) // 1.2   0xXX XX total bytes - 4 (most likely, start delimiter(1), length(2) and checksum(1) ),  42 (add the 0) - 4=38 = 0x26
+#define local_Length2               (*(uint8_T *)(swrite + 2))
 #define local_FrameType          	(*(uint8_T *)(swrite + 3)) // 3  0x10 Transmit Request
 #define local_FrameID				(*(uint8_T *)(swrite + 4)) // 4 0x00  or other number use 00 means no response
 
@@ -70,6 +71,7 @@ static uint8_T swrite[local_MSG_LENGTH];
 #define local_DX                    (*(float *)(swrite + 29)) //29 30 31 32
 #define local_DY                    (*(float *)(swrite + 33)) //33 34 35 36
 #define local_DZ                    (*(float *)(swrite + 37)) //37 38 39 40
+#define local_frame_ID              (*(uint16_T *)(swrite + 1))
 
 #define local_CS                   (*(uint8_T *)(swrite + 41)) //41
 
@@ -229,6 +231,7 @@ int main(int argc, char **argv)
     double Time_loop = startTime;
     while (ros::ok())
     {
+        Log.frame_ID_count++;
         /*
         double time = ros::Time::now().toSec(); // counting the time
         printf(KMAG"time used = %f \n"RESET, time - Time_loop );
