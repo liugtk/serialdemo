@@ -7,7 +7,7 @@
  
  <!-- serial demo node  -->
   <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node0" output="screen">
-	<param name="fccSerialPort" type="string" value="/dev/ttyUSB0" />
+        <param name="fccSerialPort" type="string" value="/dev/ttyUSB0" />
 	<param name = "ID" type = "int" value = "0" />
         <param name = "MAC_Addr1"   value = "10621696" />       <!-- this is signed int, take care if the MAC address start with F  -->
         <param name = "MAC_Addr2"  value = "818520384" />
