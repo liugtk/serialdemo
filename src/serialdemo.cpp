@@ -5,6 +5,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <string>
 
 #include "rtwtypes.h"
 
@@ -28,7 +29,8 @@ struct LOG_SET {
     int suc_receive_nu;
     int fail_receive_nu;
     int skip_nu;
-    int frame_ID_count = 0;
+    int frame_ID_count ;
+    int received_ID_backup;
 
 } Log;
 
@@ -45,7 +47,7 @@ static bool synced = 0;
 int receving_message();
 
 //********************Frame's initials
-#define local_MSG_LENGTH            42
+#define local_MSG_LENGTH            44
 
 //define of read part
 static uint8_T swrite[local_MSG_LENGTH];
@@ -71,14 +73,16 @@ static uint8_T swrite[local_MSG_LENGTH];
 #define local_DX                    (*(float *)(swrite + 29)) //29 30 31 32
 #define local_DY                    (*(float *)(swrite + 33)) //33 34 35 36
 #define local_DZ                    (*(float *)(swrite + 37)) //37 38 39 40
-#define local_frame_ID              (*(uint16_T *)(swrite + 1))
+#define local_frame_ID              (*(uint16_T *)(swrite + 41)) //41,42
 
-#define local_CS                   (*(uint8_T *)(swrite + 41)) //41
 
-#define local_SUMCHECK_LENGTH       38  // from the Frame type 3 to local_DZ 40
+
+#define local_CS                   (*(uint8_T *)(swrite + 43)) //43
+
+#define local_SUMCHECK_LENGTH       40  // from the Frame type 3 to local_DZ 42
 
 //define of the read port
-#define receive_MSG_LENGTH         40
+#define receive_MSG_LENGTH         42
 // don have the Frame ID and the broadcast_r
 static uint8_T sread[receive_MSG_LENGTH];
 static uint8_T sread_bak[receive_MSG_LENGTH];
@@ -98,10 +102,12 @@ static uint8_T sread_bak[receive_MSG_LENGTH];
 #define O2H_DX                      (*(float *)(sread + 27)) //27 28 29 30
 #define O2H_DY                      (*(float *)(sread + 31)) //31 32 33 34
 #define O2H_DZ                      (*(float *)(sread + 35)) //35 36 37 38
+#define O2H_frame_ID                (*(uint16_T *)(sread + 39)) //39, 40
 
-#define O2H_CS                      (*(uint8_T *)(sread + 39)) //39
 
-#define O2H_SUMCHECK_LENGTH       36  // from the Frame type 3 to local_DZ 38
+#define O2H_CS                      (*(uint8_T *)(sread + 41)) //39
+
+#define O2H_SUMCHECK_LENGTH       38  // from the Frame type 3 to local_DZ 40
 
 
 serial::Serial fd;
@@ -113,7 +119,7 @@ int main(int argc, char **argv)
     ros::NodeHandle serialdemo_hdlr("~");
 
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(20); // previous it is 40
+    ros::Rate loop_rate(16); // previous it is 40
     /*p
 
     //FCC interfacing
@@ -158,9 +164,7 @@ int main(int argc, char **argv)
     }
 */
 
-    ofstream myfile ("Logfile.txt");
-    if (!myfile.is_open())
-        printf(KRED"Unable to open file"RESET);
+
 
 
     string fccSerialPort = string("/dev/ttyUSB0");
@@ -169,6 +173,29 @@ int main(int argc, char **argv)
         printf(KBLU"Retrieved value %s for param 'fccSerialPort'!\n"RESET, fccSerialPort.data());
     else
         printf(KRED "Couldn't retrieve param 'fccSerialPort', using default port %s!\n"RESET, fccSerialPort.data());
+    int ID_read;
+    if (serialdemo_hdlr.getParam("ID", ID_read)){
+        printf(KBLU"Retrived ID = %d for param ID\n"RESET, ID_read );
+    }else{
+        printf(KRED"can't retrive the ID, please try again.\n"RESET);
+        exit (EXIT_FAILURE);
+    }
+
+    //  ####### // a file.close() at the end of main function
+
+    char buffer [100];
+    sprintf(buffer, "/home/britsk/NTU_Research_Group_ROS/src/serialdemo/src/logfile%d", ID_read);
+    printf ("%s\n", buffer);
+    ofstream myfile;
+    myfile.open(buffer);
+    if (!myfile.is_open()){
+        printf(KRED"Unable to open file"RESET);
+         exit (EXIT_FAILURE);
+    }
+    myfile << "this is the log file\n";
+
+    // #######
+
     int mac_addr1_read;
     if (serialdemo_hdlr.getParam("MAC_Addr1", mac_addr1_read))
     {
@@ -232,6 +259,7 @@ int main(int argc, char **argv)
     while (ros::ok())
     {
         Log.frame_ID_count++;
+        printf(KBLU"count: %d", Log.frame_ID_count);
         /*
         double time = ros::Time::now().toSec(); // counting the time
         printf(KMAG"time used = %f \n"RESET, time - Time_loop );
@@ -326,7 +354,7 @@ int main(int argc, char **argv)
         float z = 30.0;
         local_SD = 0x7E;
         local_Length1 = 0x00;
-        local_Length2 = 0x26;
+        local_Length2 = local_MSG_LENGTH - 4;
         local_FrameType = 0x10;
         local_FrameID = 0x00;
         //local_64Addr1 = 0x00A21300; // remember to swap,  0013A20040A1C930
@@ -340,6 +368,7 @@ int main(int argc, char **argv)
         local_DX = x;
         local_DY = y;
         local_DZ = z;
+        local_frame_ID = Log.frame_ID_count;
         unsigned char CSA = 0;
         for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
         {
@@ -362,12 +391,18 @@ int main(int argc, char **argv)
             if (receving_message()) //only when message is successfully
             {
                 printf("good\n");
+               // printf("%04x\n", O2H_frame_ID);
                 Log.suc_receive_nu ++;
+                if(O2H_frame_ID != (Log.received_ID_backup + 1))
+                    myfile << "there is a loss after " << Log.received_ID_backup << "no of lost : " << O2H_frame_ID - Log.received_ID_backup << endl;
+                Log.received_ID_backup = O2H_frame_ID;
+                myfile << "received frame ID : " << Log.received_ID_backup << endl;
             }
             else
             {
                 printf("bad\n");
                 Log.fail_receive_nu++;
+                myfile << "fail to receive, last ID: " << Log.received_ID_backup << endl;
             }
         }
         else
@@ -384,8 +419,7 @@ int main(int argc, char **argv)
         loop_rate.sleep();
     }
 
-
-
+    myfile.close();
 
     return 0;
 }
