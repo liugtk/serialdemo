@@ -38,79 +38,13 @@ void print_sread();
 int receving_message();
 int add_Four(int a);
 int minus_Four(int a);
-/*F2U not use
-#define F2U00_MSG_LENGTH            38
-#define F2U01_MSG_LENGTH            58
-#define F2U_MSG_MAX_LENGTH          F2U01_MSG_LENGTH
-#define F2U_MSG_MIN_LENGTH          F2U00_MSG_LENGTH
-
-
-static uint8_T fcc2UwbBuff[F2U_MSG_MAX_LENGTH]; //58
-static uint8_T testString[10];
-/* fcc2Uwb not use
-//Frame's initials
-#define F2U_HEADER1                 (*(uint8_T *)(fcc2UwbBuff + 0)) //'F'
-#define F2U_HEADER2                 (*(uint8_T *)(fcc2UwbBuff + 1)) //'C'
-#define F2U_ID                      (*(uint8_T *)(fcc2UwbBuff + 2)) //0x00 or 0x01
-#define F2U_LENGTH_BYTE             (*(uint8_T *)(fcc2UwbBuff + 3)) //F2U00_DATA_LENGTH or F2U01_DATA_LENGTH (32 or 52)
-
-//Frame content msg 0x00
-#define F2U00_X                     (*(float *)(fcc2UwbBuff + 4))
-#define F2U00_Y                     (*(float *)(fcc2UwbBuff + 8))
-#define F2U00_Z                     (*(float *)(fcc2UwbBuff + 12))
-#define F2U00_XD                    (*(float *)(fcc2UwbBuff + 16))
-#define F2U00_YD                    (*(float *)(fcc2UwbBuff + 20))
-#define F2U00_ZD                    (*(float *)(fcc2UwbBuff + 24))
-#define F2U00_TIMESTAMP             (*(unsigned long long *)(fcc2UwbBuff + 28))
-#define F2U00_CS1                   (*(uint8_T *)(fcc2UwbBuff + 36))
-#define F2U00_CS2                   (*(uint8_T *)(fcc2UwbBuff + 37))
-
-#define F2U00_SUMCHECK_LENGTH       34
-#define F2U00_DATA_LENGTH           32
-
-//Frame content msg 0x01
-#define F2U01_ANCID1                (*(uint8_T *)(fcc2UwbBuff + 4))
-#define F2U01_ANCX1                 (*(float *)(fcc2UwbBuff + 5))
-#define F2U01_ANCY1                 (*(float *)(fcc2UwbBuff + 9))
-#define F2U01_ANCZ1                 (*(float *)(fcc2UwbBuff + 13))
-#define F2U01_ANCID2                (*(uint8_T *)(fcc2UwbBuff + 17))
-#define F2U01_ANCX2                 (*(float *)(fcc2UwbBuff + 18))
-#define F2U01_ANCY2                 (*(float *)(fcc2UwbBuff + 22))
-#define F2U01_ANCZ2                 (*(float *)(fcc2UwbBuff + 26))
-#define F2U01_ANCID3                (*(uint8_T *)(fcc2UwbBuff + 30))
-#define F2U01_ANCX3                 (*(float *)(fcc2UwbBuff + 31))
-#define F2U01_ANCY3                 (*(float *)(fcc2UwbBuff + 35))
-#define F2U01_ANCZ3                 (*(float *)(fcc2UwbBuff + 39))
-#define F2U01_ANCID4                (*(uint8_T *)(fcc2UwbBuff + 43))
-#define F2U01_ANCX4                 (*(float *)(fcc2UwbBuff + 44))
-#define F2U01_ANCY4                 (*(float *)(fcc2UwbBuff + 48))
-#define F2U01_ANCZ4                 (*(float *)(fcc2UwbBuff + 52))
-
-#define F2U01_CS1                   (*(uint8_T *)(fcc2UwbBuff + 56))
-#define F2U01_CS2                   (*(uint8_T *)(fcc2UwbBuff + 57))
-
-#define F2U01_SUMCHECK_LENGTH       54
-#define F2U01_DATA_LENGTH           52
-
-uint8_T F2U01_ANCID(int id)
-{
-    return (*(uint8_T *)(fcc2UwbBuff + 4 + 13*id));
-}
-float F2U01_ANCPOS(int id, int var)
-{
-    return (*(float *)(fcc2UwbBuff + 5 + 13*id + 4*var));
-}
-*/
 
 #define U2F00_MSG_LENGTH            32
 #define U2F01_MSG_LENGTH            58
 #define U2F_MSG_MAX_LENGTH          U2F01_MSG_LENGTH
 
 static uint8_T uwb2FccBuff[U2F_MSG_MAX_LENGTH];
-//define of read part
 
-static uint8_t sread[32];
-static bool synced = 0;
 static int package_loss_nu = 0;
 #define O2H_HEADER1               (*(uint8_T *)(sread + 0)) //'U'
 #define O2H_HEADER2               (*(uint8_T *)(sread + 1)) //'W'
@@ -152,6 +86,18 @@ static int package_loss_nu = 0;
 
 using namespace std;
 
+//freq
+const int single_loop_rate = 5;
+double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop 
+//define of read part
+static uint8_t sread[32];
+static bool synced = 0;
+static bool updated = 0;
+//static bool time_reached = 0;
+static int NodeNo = 3;
+int empty_loop = 0;
+
+
 serial::Serial fd;
 
 void bufferCheck();
@@ -161,7 +107,11 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "serialdemo");
     ros::NodeHandle serialdemo_hdlr("~");
     //ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-    ros::Rate loop_rate(50); // previous it is 40
+    
+  
+    ros::Rate loop_rate(single_loop_rate); // previous it is 40
+    double rest_after_send = single_loop_rate/2000.0;//half time of the loop 
+    
     //FCC interfacing
     string fccSerialPort = string("/dev/ttyUSB0");
     //check for the FCC port name
@@ -198,10 +148,12 @@ int main(int argc, char **argv)
 	double Time_loop2 = startTime;
 	int loop_count = 0;
 	int whole_info_loop_count = 0;
+	int pkg_loss_100;
 	double secondPassed;
+
 	//variables define
 	int que_ID = minus_Four(U2F00_ID);
-	O2H_ID = 3; // default for ID = 0 to work for ID 0 need to receive ID 3
+	O2H_ID = NodeNo- 1; // default for ID = 0 to work for ID 0 need to receive ID  = NodeNo - 1;
     while (ros::ok())
     {
 		//startTime = clock();
@@ -243,23 +195,38 @@ int main(int argc, char **argv)
 
         printf ("looping \n");
 		//fd.write(uwb2FccBuff, F2U00_MSG_LENGTH);
+		receving_message();
+		if(synced){
+			print_sread();
+		}		
 		// sending,
 		printf("O2H_ID = %d, que_ID = %d\n",O2H_ID, que_ID);
         if (O2H_ID == que_ID){// or timout_flag
-			fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
-			//print_sending_msg();
-			whole_info_loop_count++;// may let this start after 4 zigbee connection complete
-			printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
-			Time_loop2 = ros::Time::now().toSec(); 
+		
+			if(updated){
+				fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
+				print_sending_msg();
+				whole_info_loop_count++;// may let this start after 4 zigbee connection complete
+				printf(KMAG"time for one info pass used = %f \n"RESET, ros::Time::now().toSec() - Time_loop2 );
+				Time_loop2 = ros::Time::now().toSec(); 
+				//ros::Duration(rest_after_send).sleep();// added rest time for waiting 
+			}else {
+				static int loop_accum = 0;
+				loop_accum ++;
+				if (loop_accum > 3){
+					printf (KRED "no response, try send again\n"RESET);
+					fd.write(uwb2FccBuff, U2F00_MSG_LENGTH);
+					print_sending_msg();
+					loop_accum = 0;
+					}
+			
+			}
+			
 			
 		}else{
 			printf(KRED"did not send since is not my queue\n"RESET);
 		}
-		
-		receving_message();
-		if(synced){
-			//print_sread();
-		}
+
 		
        /* 
         //ros::Time timeUsed = ros::Time::now() - startTime;
@@ -272,8 +239,10 @@ int main(int argc, char **argv)
 		printf ("time used: %f, accumulated time: %f \n, no of loops: %d", (ros::Time::now().toSec() - time), (ros::Time::now().toSec() - startTime), count);
 		*/
 		loop_count++;
-        printf ("package loss numebr: %d, percentage : %f \nloops: %d, whole loops count: %d\n", package_loss_nu, package_loss_nu/(double)whole_info_loop_count,loop_count, whole_info_loop_count);
-		
+		if ((loop_count % 100) == 0 )
+			pkg_loss_100 = package_loss_nu;
+        printf ("package loss numebr: %d, percentage : %f%%, percentage for every 100 loops: %d%% \n", package_loss_nu, ((package_loss_nu/(double)loop_count)*100), package_loss_nu - pkg_loss_100 );
+		printf ("loops: %d, empty loops: %d, whole loops count: %d\n",loop_count, empty_loop, whole_info_loop_count);
         loop_rate.sleep();
 
 
@@ -283,19 +252,31 @@ int main(int argc, char **argv)
     return 0;
 }
 int receving_message(){// idea to sync and receive message 
+	updated = 0;
 	//sync
-	while(!synced){ 
-		size_t bytes_avail = 0;
+	size_t bytes_avail = 0;
+	bytes_avail = fd.available();
+	if (bytes_avail >= U2F00_MSG_LENGTH * 2){
+		int cut_no =  (bytes_avail-(U2F00_MSG_LENGTH * 2) + 1);
+		for (int i = 0; i < cut_no; i++){
+			fd.read((uint8_T *)(sread + 1), 1);
+			}
+		printf (KRED"##################################################################cutting cut: %d\n"RESET,cut_no);
+		synced = false;
+	}
+	//while(!synced){ 
+		
 		bytes_avail = fd.available();
 		if (bytes_avail == 0){//search for buffering data, if no buffering data, next loop
 			printf("no buffering data.\n");
+			empty_loop++;
 			return -1;
 			}
 		fd.read((uint8_T *)(sread + 0), 1);
 		if (O2H_HEADER1 == 'U') {//UW the hearder	
 			fd.read((uint8_T *)(sread + 1), 1);
 			if(O2H_HEADER2 == 'W'){
-				fd.read((uint8_T *)(sread + 2),30);
+				fd.read((uint8_T *)(sread + 2),U2F00_MSG_LENGTH);
 				unsigned char CSA = 0, CSB = 0;
 				for (unsigned char i = 0; i < U2F00_SUMCHECK_LENGTH; i++)
 				{
@@ -305,15 +286,16 @@ int receving_message(){// idea to sync and receive message
 				printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
 				if (CSA == O2H_CS1 && CSB == O2H_CS2){
 					synced = true;
+					updated = true; // updated
 					printf (KGRN"synced\n"RESET);
 					return 1;
 				}
 			}
 		}
-	}
+	//}
 	//if synced
-	if(fd.available() != 0){ // need at least 32
-		fd.read(sread, 32);	
+	/*if(fd.available() != 0){ // need at least 32
+		fd.read(sread, U2F00_MSG_LENGTH);	
 		unsigned char CSA = 0, CSB = 0;
 		for (unsigned char i = 0; i < U2F00_SUMCHECK_LENGTH; i++)
 		{
@@ -323,9 +305,10 @@ int receving_message(){// idea to sync and receive message
 		printf (KYEL"the CSA = %d , CSB = %d, the recevied: CS1 = %d, CS2 = %d:"RESET, CSA, CSB, O2H_CS1, O2H_CS2 );
 		if (O2H_HEADER1 == 'U' && O2H_HEADER2 == 'W' && CSA == O2H_CS1 && CSB == O2H_CS2){
 			printf(KGRN"Matched\n"RESET);
+			updated = true; // updated
 			return 1;
 		}else{
-			printf("lost pakage, try sync again \n");
+			printf("lost package, try sync again \n");
 			package_loss_nu ++;
 			synced = false;
 			return 1;
@@ -334,8 +317,10 @@ int receving_message(){// idea to sync and receive message
 		printf("no buffering data. try sync again\n");
 		package_loss_nu ++;
 		synced = false;
+		//ros::Duration(rest_after_sync).sleep(); //
 		return -1;
 	}
+	*/
 		
 }
 
@@ -365,222 +350,26 @@ void print_sread(){ //used for print readed msg from others
 		printf ("CS1 = %d, CS2 = %d\n", O2H_CS1, O2H_CS2);
 	}
 	
-int add_Four(int a){ // loop inside 0,1,2,3
-	if (a < 0 || a > 3){
+int add_Four(int a){ // loop inside 0,1,2,3 ...... NodeNo - 1
+	if (a < 0 || a > (NodeNo-1)){
 		printf(KRED"use a invalid input in the function add_four"RESET);
 		}
-		if (a == 3){
+		if (a == (NodeNo-1)){
 			return 0;
 		}else{
 			return a + 1;	
 	}
 }
-int minus_Four(int a){ // loop inside 0,1,2,3
-	if (a < 0 || a > 3){
+int minus_Four(int a){ // loop inside 0,1,2,3 ... NodeNo -1
+	if (a < 0 || a > (NodeNo-1)){
 		printf(KRED"use a invalid input in the function add_four"RESET);
 		}
 		if (a == 0){
-			return 3;
+			return (NodeNo-1);
 		}else{
 			return a - 1;	
 	}
 }
 
 
-/*
-void bufferCheck()
-{
-    static uint8_T synched = false;
-    uint32_T bytes_avail = 0;
-
-    bytes_avail = fd.available();
-
-    //go on if there's no data to process
-    if(bytes_avail != 0)
-    {
-        //If data stream is not in sync then we have to resync
-        if(!synched)
-        {
-            //If buffered data is long enough, then can start re-sync, otherwise must return
-            if(bytes_avail < F2U_MSG_MIN_LENGTH*2)
-                return;
-            else
-            {
-                //Sliding the frame byte by byte and search for header
-                while(ros::ok() && bytes_avail >= F2U_MSG_MIN_LENGTH)
-                {
-                    //Shift and inject new byte to the 4th header byte then continue
-                    fcc2UwbBuff[0] = fcc2UwbBuff[1];
-                    fcc2UwbBuff[1] = fcc2UwbBuff[2];
-                    fcc2UwbBuff[2] = fcc2UwbBuff[3];
-
-                    fd.read(fcc2UwbBuff + 3, 1);
-
-                    if(F2U_HEADER1 == 'F' && F2U_HEADER2 == 'C' && (F2U_ID == 0x00 || F2U_ID == 0x01)
-                            && (F2U_LENGTH_BYTE == F2U00_DATA_LENGTH || F2U_LENGTH_BYTE == F2U01_DATA_LENGTH))
-                    {
-                        printf("Sync header found: %2x %2x %2x %2x\n", fcc2UwbBuff[0], fcc2UwbBuff[1], fcc2UwbBuff[2], fcc2UwbBuff[3]);
-
-                        fd.read(fcc2UwbBuff + 4, F2U_LENGTH_BYTE + 2);
-                        uint8_t CSA = 0, CSB = 0;
-                        for (uint8_T i = 0; i < F2U_LENGTH_BYTE + 2; i++)
-                        {
-                            CSA = CSA + fcc2UwbBuff[2+i];
-                            //printf("%2d:%02x ",i, fcc2UwbBuff[2+i]);
-                            printf("%02x ", fcc2UwbBuff[2+i]);
-                            CSB = CSB + CSA;
-                        }
-                        printf("%2x %2x\n", fcc2UwbBuff[F2U_LENGTH_BYTE + 4], fcc2UwbBuff[F2U_LENGTH_BYTE + 5]);
-
-                        //if the CRC is valid then we can declare stream is synchronized
-                        if(CSA == fcc2UwbBuff[F2U_LENGTH_BYTE + 4] && CSB == fcc2UwbBuff[F2U_LENGTH_BYTE + 5])
-                        {
-                            synched = true;
-                            break;
-                        }
-                        else
-                            printf("sync crc failed: %x/%x; %x/%x\n", CSA, fcc2UwbBuff[F2U_LENGTH_BYTE + 4], CSB, fcc2UwbBuff[F2U_LENGTH_BYTE + 5]);
-                    }
-                    bytes_avail = fd.available();
-                }
-
-                //If we have broken out of the while loop but still haven't synced, then the buffer has depleted
-                if(!synched)
-                    return;
-            }
-        }
-
-        bytes_avail = fd.available();
-
-        while(bytes_avail >= F2U_MSG_MIN_LENGTH)
-        {
-            printf("Buffered data = %d\n", bytes_avail);
-            //first check the headers and id
-            fd.read(fcc2UwbBuff, 4);
-            if(F2U_HEADER1 == 'F' && F2U_HEADER2 == 'C' && F2U_ID == 0x00 && F2U_LENGTH_BYTE == F2U00_DATA_LENGTH)
-            {
-                //printf("Recieved an imu message.\n");
-                fd.read(fcc2UwbBuff + 4, F2U00_MSG_LENGTH - 4);
-                bytes_avail = fd.available();
-                uint8_t CSA = 0, CSB = 0;
-                for (uint8_T i = 0; i < F2U00_SUMCHECK_LENGTH; i++)
-                {
-                    CSA = CSA + fcc2UwbBuff[2+i];
-                    CSB = CSB + CSA;
-                }
-                //printf("CSA = %d|%d, CSB = %d|%d\n", CSA, F2U00_CS1, CSB, F2U00_CS2);
-                if(CSA == F2U00_CS1 && CSB == F2U00_CS2)
-                {
-                    printf("IMU update CRC valid\n");
-                    for(int i = 0; i < F2U00_MSG_LENGTH; i++)
-                        printf("%x ", fcc2UwbBuff[i]);
-                    printf("\n");
-                    for(int i = 0; i < 6; i++)
-                    {
-                        float temp = (*(float *)(fcc2UwbBuff + 4 + i*4));
-                        printf("%4.2f ", temp);
-                    }
-                    if(fccTimestamp == F2U00_TIMESTAMP)
-                    {
-                        printf(KYEL"Timestamp not changed, frame ignored!\n"RESET);
-                    }
-                    else
-                    {
-                        printf("%d\n", F2U00_TIMESTAMP);
-                        fcc_x = F2U00_X;
-                        fcc_x = F2U00_Y;
-                        fcc_z = F2U00_Z;
-                        fcc_xd = F2U00_XD;
-                        fcc_yd = F2U00_YD;
-                        fcc_zd = F2U00_ZD;
-                        fccTimestamp = F2U00_TIMESTAMP;
-
-                        printf("%f; %f; %f; %f; %f; %f; %f; %f", fcc_x, fcc_y, fcc_z, fcc_xd, fcc_yd, fcc_zd, fccTimestamp);
-//                        if(fccFirstTimestamp == 0)
-//                        {
-//                            fccFirstTimestamp = fccTimestamp;
-//                            fccLog << "tf0=" << getLocalTimeNow();
-//                        }
-//                        else
-//                        {
-//                            if(logEnable)
-//                                fccLog << "fx=[fx " << fcc_x << "];fy=[fy "<< fcc_y << "];fz=[fz " << fcc_z
-//                                       << "];fxd=[fxd " << fcc_xd << "];fyd=[fyd " << fcc_yd << "];fzd=[fzd " << fcc_zd << "];"
-//                                       << "tf=[tf " << (fccTimestamp - fccFirstTimestamp)/1000.0 << "];" << endl;
-//                        }
-                    }
-                }
-                else
-                {
-                    printf(KRED"CRC failed!\n"RESET);
-                    //                    for(int i = 0; i < F2U00_MSG_LENGTH; i++)
-                    //                        printf("%x ", fcc2UwbBuff[i]);
-                    //                    printf("\n");
-                    return;
-                }
-
-            }
-//            else if(F2U_HEADER1 == 'F' && F2U_HEADER2 == 'C' && F2U_ID == 0x01 && F2U_LENGTH_BYTE == F2U01_DATA_LENGTH)
-//            {
-//                printf("Recieved an anchor message.\n");
-//                fd.read(fcc2UwbBuff + 4, F2U01_MSG_LENGTH - 4);
-//                bytes_avail = fd.available();
-//                uint8_t CSA = 0, CSB = 0;
-//                for (uint8_T i = 0; i < F2U01_SUMCHECK_LENGTH; i++)
-//                {
-//                    CSA = CSA + fcc2UwbBuff[2+i];
-//                    CSB = CSB + CSA;
-//                }
-//                printf("CSA = %d|%d, CSB = %d|%d\n", CSA, F2U01_CS1, CSB, F2U01_CS2);
-//                if(CSA == F2U01_CS1 && CSB == F2U01_CS2)
-//                {
-//                    printf("Anchor update CRC valid\n");
-//                    for(int i = 0; i < F2U01_MSG_LENGTH; i++)
-//                        printf("%x ", fcc2UwbBuff[i]);
-//                    printf("\n");
-//                    for(int i = 0; i < 4; i++)
-//                    {
-//                        ancsId[i] = F2U01_ANCID(i);
-//                        for(int j = 0; j < 3; j++)
-//                            ancsPos[i*3 + j] = F2U01_ANCPOS(i, j);
-//                    }
-
-//                    for(int i = 0; i < 3; i++)
-//                        for(int j = 0; j < 4; j++)
-//                        {
-//                            //printf("Transposing i=%d, j=%d.\n", i, j);
-//                            ancs[i*4 + j] = ancsPos[j*3 + i];
-//                        }
-
-//                    for(int i = 0; i < 12; i++)
-//                        printf("%4.2f # ", ancsPos[i]);
-//                    printf("\n");
-
-//                    //send back the frame to FCC to confirm
-//                    F2U_HEADER1 = 'U';
-//                    F2U_HEADER2 = 'W';
-//                    //tcdrain(fd);
-//                    fd.write(fcc2UwbBuff, F2U01_MSG_LENGTH);
-//                }
-//                else
-//                {
-//                    printf(KRED"CRC failed!\n"RESET);
-//                    for(int i = 0; i < F2U01_MSG_LENGTH; i++)
-//                        printf("%x ", fcc2UwbBuff[i]);
-//                    printf("\n");
-//                    return;
-//                }
-
-//            }
-            else
-            {
-                //if anything other than those above then we have got a misalignment, turn off 'synched' variable to re-sync in next calls
-                printf(KRED"Unrecognized headers! Data stream out of sync\n"RESET);
-                synched = false;
-                return;
-            }
-        }
-    }
-}
-*/
 
