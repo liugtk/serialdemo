@@ -1,3 +1,6 @@
+/*
+ * normal ZigBee one with
+ */
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <iostream>
@@ -275,16 +278,16 @@ int receving_message(){
                     print_sread();// two of this in receive
                     printf (KGRN"synced\n"RESET);
                     return 1;
-                }else{ // failed, by default, synced = false, restore the memory, return -1 indicate unsuccessful
+                }else{ // failed, by default, synced = false, restore the memory, return 0 indicate unsuccessful
                     memcpy(sread + 2,sread_bak + 2, local_MSG_LENGTH - 2 );
-                    return -1;
+                    return 0;
                 }
             }//W
         }//U
         //after trying to sync, if buffer become empty
         if (fd.available() == 0)
-        { // return -1 indicate unsuccessful receive
-            return -1;
+        { // return 0 indicate unsuccessful receive
+            return 0;
         }
     }
     if (synced)
@@ -305,12 +308,12 @@ int receving_message(){
             return 1;
         }
         else
-        { // 1. restore, 2.package loss count, 3. synced turn off 4. return -1 to indicate the unsuccessful receive
+        { // 1. restore, 2.package loss count, 3. synced turn off 4. return 0 to indicate the unsuccessful receive
             printf("lost pakage, try sync again \n");
             memcpy(sread + 2,sread_bak + 2, local_MSG_LENGTH - 2 );
             package_loss_nu ++;
             synced = false;
-            return -1;
+            return 0;
 
         }
     }
