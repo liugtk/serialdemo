@@ -60,7 +60,7 @@ static double receive_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10
 //********************Frame's initials
 
 
-#define local_MSG_LENGTH            43
+#define local_MSG_LENGTH            44
 
 //define of read part
 static uint8_T swrite[local_MSG_LENGTH];
@@ -86,14 +86,15 @@ static uint8_T swrite[local_MSG_LENGTH];
 #define local_DX                    (*(float *)(swrite + 30)) //29 30 31 32 +1
 #define local_DY                    (*(float *)(swrite + 34)) //33 34 35 36 +1
 #define local_DZ                    (*(float *)(swrite + 38)) //37 38 39 40 +1
+#define local_Token                 (*(uint8_T *)(swrite + 42)) // 42
 
-#define local_CS                   (*(uint8_T *)(swrite + 42)) //42
+#define local_CS                   (*(uint8_T *)(swrite + 43)) //43
 
-#define local_SUMCHECK_LENGTH       39  // from the Frame type 3 to local_DZ 40
-#define local_length                0x27
+#define local_SUMCHECK_LENGTH       40  // from the Frame type 3 to local_DZ 40
+#define local_length                0x28
 
 //define of the read port
-#define receive_MSG_LENGTH         41
+#define receive_MSG_LENGTH         42
 // don have the Frame ID and the broadcast_r    O2H -> out 2 here
 static uint8_T sread[receive_MSG_LENGTH];
 static uint8_T sread_bak[receive_MSG_LENGTH];
@@ -113,10 +114,11 @@ static uint8_T sread_bak[receive_MSG_LENGTH];
 #define O2H_DX                      (*(float *)(sread + 28)) //27 28 29 30 +1
 #define O2H_DY                      (*(float *)(sread + 32)) //31 32 33 34 +1
 #define O2H_DZ                      (*(float *)(sread + 36)) //35 36 37 38 +1
+#define O2H_Token                   (*(uint8_T *)(sread + 40)) // 40
 
-#define O2H_CS                      (*(uint8_T *)(sread + 40)) //40
+#define O2H_CS                      (*(uint8_T *)(sread + 41)) //41
 
-#define O2H_SUMCHECK_LENGTH       37  // from the Frame type 3 to local_DZ 38
+#define O2H_SUMCHECK_LENGTH       38 // from the Frame type 3 to local_DZ 38
 
 using namespace std;
 
@@ -248,8 +250,11 @@ int main(int argc, char **argv)
             {
                 //printf("test2, in receive");
                 //check ID
+                ros::Duration sleeptime(0.2);
+                sleeptime.sleep();
                 if ( (O2H_ID == que_ID)  )//receive the prece ID
                 {
+                    local_Token = O2H_Token + 1;
                     fd.write(swrite, local_MSG_LENGTH);
                     print_sending_msg();
                     for (int i = 0; i < local_MSG_LENGTH; i++)
@@ -264,6 +269,7 @@ int main(int argc, char **argv)
                 {
                     //flag time_out close
                     flag_timeout_timer = 0;
+                    //local_Token ++;
                 }
                 else
                 {
@@ -319,7 +325,7 @@ int receving_message(){
                 CSA = CSA + sread[3+i]; //3 - 38
             }
             CSA = 0xFF - CSA;
-            printf (KYEL"the CSA = %d , the recevied: CS1 = %d"RESET, CSA, O2H_CS );
+            printf (KYEL"the CSA = %d , the recevied: CS1 = %d\n"RESET, CSA, O2H_CS );
             if (CSA == O2H_CS){
                 synced = true;
                 print_sread();// two of this
@@ -372,6 +378,7 @@ void print_sending_msg()
     printf(KBLU"the sending message: ---------------------\n");
     printf ("Header = %c\n", local_SD);
     printf ("ID = %d\n", local_ID);
+    printf ("Token = %d\n", local_Token);
     printf ("x  = %f, y  = %f, z  = %f\n", local_X, local_Y, local_Z);
     printf ("Dx = %f, Dy = %f, Dz = %f\n", local_DX, local_DY, local_DZ);
     printf ("CS = %d\n"RESET, local_CS);
@@ -383,7 +390,7 @@ void print_sread()
     printf ("Header = %c\n", O2H_SD);
 
     printf ("ID = %d\n", O2H_ID);
-
+    printf ("Token = %d\n", O2H_Token);
     printf ("x  = %f, y  = %f, z  = %f\n", O2H_X, O2H_Y, O2H_Z);
     printf ("Dx = %f, Dy = %f, Dz = %f\n", O2H_DX, O2H_DY, O2H_DZ);
 
