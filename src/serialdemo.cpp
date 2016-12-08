@@ -232,6 +232,15 @@ int main(int argc, char **argv)
                 //check ID
                 if ( (O2H_ID == que_ID)  )//receive the prece ID
                 {
+                    local_Token = O2H_Token + 1;
+                    unsigned char CSA = 0, CSB = 0;
+                    for (unsigned char i = 0; i < local_SUMCHECK_LENGTH; i++)
+                    {
+                        CSA = CSA + swrite[2+i]; //4 - 31
+                        CSB = CSB + CSA; // 32
+                    }
+                    local_CS1 = CSA;
+                    local_CS2 = CSB;
                     fd.write(swrite, local_MSG_LENGTH);
                     print_sending_msg();
                     //flag time_out on
