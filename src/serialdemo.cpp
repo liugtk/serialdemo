@@ -76,7 +76,7 @@ static uint8_t sread_bak[local_MSG_LENGTH];
 #define O2H_DX                    (*(float *)(sread + 16))
 #define O2H_DY                    (*(float *)(sread + 20))
 #define O2H_DZ                    (*(float *)(sread + 24))
-#define O2H_NODECOUNT             (*(uint8_T *)(sread + 28))
+#define O2H_Token                 (*(uint8_T *)(sread + 28))
 #define O2H_LOSS                  (*(uint8_T *)(sread + 29))
 
 #define O2H_CS1                   (*(uint8_T *)(sread + 30))
@@ -95,7 +95,7 @@ static uint8_t sread_bak[local_MSG_LENGTH];
 #define local_DX                    (*(float *)(swrite + 16))
 #define local_DY                    (*(float *)(swrite + 20))
 #define local_DZ                    (*(float *)(swrite + 24))
-#define local_NODECOUNT             (*(uint8_T *)(swrite + 28))
+#define local_Token                 (*(uint8_T *)(swrite + 28))
 #define local_LOSS                  (*(uint8_T *)(swrite + 29))
 
 #define local_CS1                   (*(uint8_T *)(swrite + 30))
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
         local_DX = y;
         local_DY = -x;
         local_DZ = y/10;
-        local_NODECOUNT = 4;
+        //local_Token = 4;
         local_LOSS = 0;
 
         //load the crc
@@ -348,10 +348,10 @@ void print_sending_msg()
     printf ("Header1 = %c\n", local_HEADER1);
     printf ("Header2 = %c\n", local_HEADER2);
     printf ("ID = %d\n", local_ID);
+    printf ("Token = %d\n", local_Token);
     printf ("LENGTH = %d\n",local_LENGTH_BYTE);
     printf ("x  = %f, y  = %f, z  = %f\n", local_X, local_Y, local_Z);
     printf ("Dx = %f, Dy = %f, Dz = %f\n", local_DX, local_DY, local_DZ);
-    printf ("Nodecount = %d\n", local_NODECOUNT);
     printf ("loss = %d\n", local_LOSS);
     printf ("CS1 = %d, CS2 = %d\n"RESET, local_CS1, local_CS2);
 }
@@ -362,10 +362,10 @@ void print_sread()
     printf ("Header1 = %c\n", O2H_HEADER1);
     printf ("Header2 = %c\n", O2H_HEADER2);
     printf ("ID = %d\n", O2H_ID);
+    printf ("Token = %d\n", O2H_Token);
     printf ("LENGTH = %d\n",O2H_LENGTH_BYTE);
     printf ("x  = %f, y  = %f, z  = %f\n", O2H_X, O2H_Y, O2H_Z);
     printf ("Dx = %f, Dy = %f, Dz = %f\n", O2H_DX, O2H_DY, O2H_DZ);
-    printf ("Nodecount = %d\n", O2H_NODECOUNT);
     printf ("loss = %d\n", O2H_LOSS);
     printf ("CS1 = %d, CS2 = %d\n", O2H_CS1, O2H_CS2);
 }
