@@ -58,6 +58,9 @@ static bool ID_update[4];
 static int ID_miss[4];
 // for max miss count
 static int ID_max_miss[4];
+// for max delay
+static int temp_delay;
+static int max_delay;
 
 // make a simple starting flag for update info
 static bool start_update = 0;
@@ -73,7 +76,7 @@ static double receive_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10
 //********************Frame's initials
 
 
-#define local_MSG_LENGTH            44
+#define local_MSG_LENGTH            48
 
 //define of read part
 static uint8_T swrite[local_MSG_LENGTH];
@@ -100,14 +103,16 @@ static uint8_T swrite[local_MSG_LENGTH];
 #define local_DY                    (*(float *)(swrite + 34)) //33 34 35 36 +1
 #define local_DZ                    (*(float *)(swrite + 38)) //37 38 39 40 +1
 #define local_Token                 (*(uint8_T *)(swrite + 42)) // 42
-#define local_CS                   (*(uint8_T *)(swrite + 43)) //43
+#define local_time                  (*(uint32_T *)(swrite + 43))// 43 44 45 46
 
-#define local_SUMCHECK_LENGTH       40  // from the Frame type 3 to local_DZ 40
+#define local_CS                   (*(uint8_T *)(swrite + 47)) //47
+
+#define local_SUMCHECK_LENGTH       44  // from the Frame type 3 to local_DZ 40
 // writen in the local info
-#define local_length                0x28
+#define local_length                0x2C
 
 //define of the read port
-#define receive_MSG_LENGTH         42
+#define receive_MSG_LENGTH         46
 // don have the Frame ID and the broadcast_r    O2H -> out 2 here
 static uint8_T sread[receive_MSG_LENGTH];
 static uint8_T sread_bak[receive_MSG_LENGTH];
@@ -128,10 +133,11 @@ static uint8_T sread_bak[receive_MSG_LENGTH];
 #define O2H_DY                      (*(float *)(sread + 32)) //31 32 33 34 +1
 #define O2H_DZ                      (*(float *)(sread + 36)) //35 36 37 38 +1
 #define O2H_Token                   (*(uint8_T *)(sread + 40)) // 40
+#define O2H_time                    (*(uint32_T *)(sread + 41))// 41 42 43 44
 
-#define O2H_CS                      (*(uint8_T *)(sread + 41)) //41
+#define O2H_CS                      (*(uint8_T *)(sread + 45)) //45
 
-#define O2H_SUMCHECK_LENGTH       38 // from the Frame type 3 to local_DZ 38
+#define O2H_SUMCHECK_LENGTH       42 // from the Frame type 3 to local_DZ 38
 
 using namespace std;
 
@@ -233,6 +239,7 @@ int main(int argc, char **argv)
         local_Broadcast_r = 0x00;
         local_Options = 0x00;
         local_Token++;
+        local_time = (uint32_T)(ros::Time::now().toSec()*1000);
         local_X = x;
         local_Y = y;
         local_Z = z;
@@ -279,7 +286,8 @@ int main(int argc, char **argv)
                 }
             }
             printf("\n");
-            printf ("package loss numebr: %d, loops: %d , time: %f\n", package_loss_nu, loop_count, ros::Time::now().toSec());
+            printf ("package loss numebr: %d, loops: %d , max time delay: %d\n", package_loss_nu, loop_count,  max_delay  );
+           // printf ("just for test, the received time: %d\n", O2H_time);
 
             //print the miss count
             for (unsigned int i = 0; i < NodeNo; i ++){
@@ -327,6 +335,13 @@ void receving_message(){
                 // update to the table and indicator
                 update_table();
                 ID_update[O2H_ID] = 1;
+                //for delay and max delay
+                temp_delay = (uint32_T)(ros::Time::now().toSec()*1000) - O2H_time;
+                printf("the delay for this package: %d \n", temp_delay);
+                if (temp_delay > max_delay){
+                    max_delay = temp_delay;
+                }
+
 
             }else{ // failed, by default, synced = false, restore the memory, return 0 indicate unsuccessful
                 memcpy(sread ,sread_bak , receive_MSG_LENGTH );
