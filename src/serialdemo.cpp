@@ -286,7 +286,7 @@ int main(int argc, char **argv)
                 }
             }
             printf("\n");
-            printf ("package loss numebr: %d, loops: %d , max time delay: %d\n", package_loss_nu, loop_count,  max_delay  );
+            printf ("package loss numebr: %d, loops: %d \n", package_loss_nu, loop_count  );
            // printf ("just for test, the received time: %d\n", O2H_time);
 
             //print the miss count
@@ -336,11 +336,13 @@ void receving_message(){
                 update_table();
                 ID_update[O2H_ID] = 1;
                 //for delay and max delay
+                /*
                 temp_delay = (uint32_T)(ros::Time::now().toSec()*1000) - O2H_time;
                 printf("the delay for this package: %d \n", temp_delay);
                 if (temp_delay > max_delay){
                     max_delay = temp_delay;
                 }
+                */
 
 
             }else{ // failed, by default, synced = false, restore the memory, return 0 indicate unsuccessful
