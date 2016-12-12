@@ -1,9 +1,14 @@
+//
+//This is version 4, we now try to directly keeping sending infomation without the token psasing scheme.
+//
+//
+//
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <iostream>
 #include <math.h>
 #include <cstring>
-#include <ctime>
+
 
 #include "rtwtypes.h"
 
@@ -33,7 +38,8 @@ static float fcc_x = 0, fcc_y = 0, fcc_z = 0, fcc_xd = 0, fcc_yd = 0, fcc_zd = 0
 //function list
 void print_sending_msg ();
 void print_sread();
-int receving_message();
+void update_table(){}
+void receving_message();
 int loop_add(int a);
 int loop_minus(int a);
 
@@ -41,18 +47,25 @@ int loop_minus(int a);
 //********************variable define
 //********************freq
 static int single_loop_rate = 5;
-double rest_after_sync = single_loop_rate/1000.0 * 1.1;//half time of the loop
+
 static int NodeNo = 3;
 
 //********************the global variable used
-static bool synced = 0;
-static bool updated = 0;
-static bool speaking = 0;
-static bool listening = 1;
-static bool listener_time_out = 0;
-static bool flag_timeout_timer = 0;
-//static bool time_reached = 0;
+
+// for update info
+static bool ID_update[4];
+// for print miss count
+static int ID_miss[4];
+// for max miss count
+static int ID_max_miss[4];
+
+// make a simple starting flag for update info
+static bool start_update = 0;
+
+
+//for package loss check
 static int package_loss_nu = 0;
+// for setting the receive time out
 static double receive_time_out  = 32 * 0.002 + 0.01; // 2ms for each byte and 10 ms for extra wait
 
 
@@ -91,6 +104,7 @@ static uint8_T swrite[local_MSG_LENGTH];
 #define local_CS                   (*(uint8_T *)(swrite + 43)) //43
 
 #define local_SUMCHECK_LENGTH       40  // from the Frame type 3 to local_DZ 40
+// writen in the local info
 #define local_length                0x28
 
 //define of the read port
@@ -193,16 +207,9 @@ int main(int argc, char **argv)
     double Time_loop = startTime;
 
     int loop_count = 0;
-    double receive_timer = 0;
 
 
-    //variables define
-    int que_ID = loop_minus(local_ID);
-    O2H_ID = NodeNo - 1; // default for ID = 0 to work, need to receive NodeNo - 1
-     if ( O2H_ID == que_ID  )
-    {
-         flag_timeout_timer = 1;
-     }
+
     while (ros::ok())
     {
         double time = ros::Time::now().toSec(); // counting the time
@@ -226,6 +233,7 @@ int main(int argc, char **argv)
         local_16Addr = 0xFEFF;       // remember to swap.
         local_Broadcast_r = 0x00;
         local_Options = 0x00;
+        local_Token++;
         local_X = x;
         local_Y = y;
         local_Z = z;
@@ -240,84 +248,72 @@ int main(int argc, char **argv)
         local_CS = 0xFF - CSA;
         //***************************end of Info Update
 
+        // directly send without consider the que
+        fd.write(swrite, local_MSG_LENGTH);
+        print_sending_msg();
 
-        //Check buffer
-        if (fd.available() >= local_MSG_LENGTH) // >= enough bytes
-        {
-            //read
-            //printf("test1, in avail()");
-            if (receving_message()) //only when message is successfully
-            {
-                //printf("test2, in receive");
-                //check ID
-                ros::Duration sleeptime(0.2);
-                sleeptime.sleep();
-                if ( (O2H_ID == que_ID)  )//receive the prece ID
-                {
-                    local_Token = O2H_Token + 1;
-                    fd.write(swrite, local_MSG_LENGTH);
-                    print_sending_msg();
-                    for (int i = 0; i < local_MSG_LENGTH; i++)
-                    {
-                        printf("%02x ", swrite[i]);
-                    }
-                    //flag time_out on
-                    flag_timeout_timer = 1;
-                    receive_timer = ros::Time::now().toSec();
-                }
-                else if(O2H_ID == loop_add(local_ID)) // received next ID
-                {
-                    //flag time_out close
-                    flag_timeout_timer = 0;
-                    //local_Token ++;
-                }
-                else
-                {
-                    printf(KRED"incorrect ID received \n"RESET);
-                }
-
-            }
-
-        }
-        else if(flag_timeout_timer) //check time out when not enough data in buffer
-        {
-            if ((ros::Time::now().toSec() - receive_timer) > receive_time_out)
-            { // if timeout, resend, and reset timeout
-
-                printf(KRED"time_out\n"RESET);
-                //send
-                fd.write(swrite, local_MSG_LENGTH);
-                print_sending_msg();
-                for (int i = 0; i < local_MSG_LENGTH; i++)
-                {
-                    printf("%02x ", swrite[i]);
-                }
-
-                flag_timeout_timer = 1;
-                receive_timer = ros::Time::now().toSec();
-            }
-        }
+        //directly receive and clear the buffer
+        printf("buffer : %d\n",fd.available());
+        receving_message();
 
         loop_count++;
+        if ((double)ros::Time::now().toSec() - startTime > 5){
+            start_update = 1;
+        }
 
-        printf ("package loss numebr: %d, \n", package_loss_nu );
-        printf ("loops: %d, \n",loop_count);
+        if(start_update){
+            //print update info
+            for (unsigned int  i = 0; i < NodeNo ; i++){
+                if (i != local_ID){
+                    printf ("update%d = %d ***** ", i , ID_update[i]);
+                    if (!ID_update[i]){
+                        ID_miss[i]++;
+                        if(ID_miss[i] > ID_max_miss[i]){
+                            ID_max_miss[i] = ID_miss[i];
+                        }
+                    }
+                    else
+                    {
+                        ID_miss[i] = 0;
+                    }
+                    ID_update[i] = 0;
+                }
+            }
+            printf("\n");
+            printf ("package loss numebr: %d, loops: %d , time: %f\n", package_loss_nu, loop_count, ros::Time::now().toSec());
+
+            //print the miss count
+            for (unsigned int i = 0; i < NodeNo; i ++){
+                if(i != local_ID){
+                    printf("UAV%d miss: %d", i, ID_miss[i]);
+                }
+            }
+            printf("\n");
+            //print the max miss count
+            for (unsigned int i = 0; i < NodeNo; i ++){
+                if(i != local_ID){
+                    printf("UAV%d max miss: %d", i, ID_max_miss[i]);
+                }
+            }
+            printf("\n");
+        }
+
+
         loop_rate.sleep();
     }
     return 0;
 }
 
-int receving_message(){
-    //sync
-    // already have enough bytes
-    while(!synced)
-    {
+void receving_message(){
+    while (fd.available() >= receive_MSG_LENGTH){
+
+        // there is no sync
+        // directly chcek the header
         fd.read((uint8_T *)(sread + 0), 1);
-        //try sync
         if (O2H_SD == 0x7E)    // SD = 7E
         {
             // back up the previous data
-            memcpy(sread_bak,sread, local_MSG_LENGTH );// dest: sread_bak, source: sread
+            memcpy(sread_bak,sread, receive_MSG_LENGTH );// dest: sread_bak, source: sread
             fd.read((uint8_T *)(sread + 1),receive_MSG_LENGTH - 1 );
             unsigned char CSA = 0;
             for (unsigned char i = 0; i < O2H_SUMCHECK_LENGTH; i++)
@@ -327,49 +323,26 @@ int receving_message(){
             CSA = 0xFF - CSA;
             printf (KYEL"the CSA = %d , the recevied: CS1 = %d\n"RESET, CSA, O2H_CS );
             if (CSA == O2H_CS){
-                synced = true;
-                print_sread();// two of this
-                printf (KGRN"synced\n"RESET);
-                return 1;
+                // there won't be sync, here it already indicate that it is a good package and we will update the table and indicator
+                print_sread();// print the data received
+                // update to the table and indicator
+                update_table();
+                ID_update[O2H_ID] = 1;
+
             }else{ // failed, by default, synced = false, restore the memory, return 0 indicate unsuccessful
                 memcpy(sread ,sread_bak , receive_MSG_LENGTH );
-                return 0;
+                package_loss_nu++;
+
             }
 
         }//SD
         //after trying to sync, if buffer become empty
-        if (fd.available() == 0)
+        if (fd.available() < receive_MSG_LENGTH)
         { // return 0 indicate unsuccessful receive
-            return 0;
+            return;
         }
     }
-    if (synced)
-    {
-        memcpy(sread_bak,sread, local_MSG_LENGTH ); //back up sread to sread_bak
-        fd.read(sread, local_MSG_LENGTH);
-        unsigned char CSA = 0;
-        for (unsigned char i = 0; i < O2H_SUMCHECK_LENGTH; i++)
-        {
-            CSA = CSA + sread[3+i]; //3 - 38
-        }
-        CSA = 0xFF - CSA;
-        printf (KYEL"the CSA = %d , the recevied: CS1 = %d\n"RESET, CSA, O2H_CS );
-        if (CSA == O2H_CS && O2H_SD == 0x7E){ // check both 2 directly
-            // if correct, updated, return to main function and see if ID match the que
-            printf(KGRN"Matched\n"RESET);
-            print_sread();//two of this in receive
-            return 1;
-        }
-        else
-        { // 1. restore, 2.package loss count, 3. synced turn off 4. return 0 to indicate the unsuccessful receive
-            printf("lost pakage, try sync again \n");
-             memcpy(sread ,sread_bak , receive_MSG_LENGTH  );
-            package_loss_nu ++;
-            synced = false;
-            return 0;
 
-        }
-    }
 
 }
 
