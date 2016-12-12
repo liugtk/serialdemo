@@ -100,7 +100,6 @@ static uint8_T swrite[local_MSG_LENGTH];
 #define local_DY                    (*(float *)(swrite + 34)) //33 34 35 36 +1
 #define local_DZ                    (*(float *)(swrite + 38)) //37 38 39 40 +1
 #define local_Token                 (*(uint8_T *)(swrite + 42)) // 42
-
 #define local_CS                   (*(uint8_T *)(swrite + 43)) //43
 
 #define local_SUMCHECK_LENGTH       40  // from the Frame type 3 to local_DZ 40
