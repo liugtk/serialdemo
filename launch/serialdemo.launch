@@ -11,7 +11,7 @@
  <!-- serial demo node -->
   <node respawn="false" pkg="serialdemo" type="serialdemo_node" name="serialdemo_node0" output="screen">
 	<param name="fccSerialPort" type="string" value="/dev/ttyUSB0" />
-	<param name = "ID" type = "int" value = "0" />
+        <param name = "ID" type = "int" value = "0" />
 	
 
 	
